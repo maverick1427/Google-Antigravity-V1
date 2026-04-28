@@ -200,6 +200,7 @@ function goTo(p) {
   document.querySelectorAll('.ni').forEach(e => e.classList.toggle('on', e.dataset.p === p));
   if (window.innerWidth <= 900) closeSidebar();
   if (LOADERS[p]) LOADERS[p]();
+  applyStyles(); // Ensure styles/backgrounds are correct for the current page
 }
 
 // ════════════════════════════════════ DASHBOARD
@@ -1447,6 +1448,30 @@ async function loadCfg() {
         <div class="fg"><label>Confirm Password</label><input type="password" id="pwc"></div>
         <button class="btn bs bfl" onclick="changeMyPw()">Update Password</button>
       </div>
+      <div class="card" style="margin-top:16px">
+        <div class="ct_">🎨 Appearance & Theme</div>
+        <div class="fg"><label>Theme Selection</label>
+          <select id="stheme" onchange="applyStyles()">
+            <option value="default"${cfg.theme === 'default' ? ' selected' : ''}>Default (Professional)</option>
+            <option value="dark"${cfg.theme === 'dark' ? ' selected' : ''}>Dark Mode</option>
+            <option value="light"${cfg.theme === 'light' ? ' selected' : ''}>Light Mode</option>
+            <option value="cyberpunk"${cfg.theme === 'cyberpunk' ? ' selected' : ''}>Cyberpunk (Neon)</option>
+          </select>
+        </div>
+        <div class="r2">
+          <div class="fg"><label>Login Background URL</label><input id="sbg_l" value="${esc(cfg.bg_login || '')}" placeholder="Leave blank for default"></div>
+          <div class="fg"><label>App Background URL</label><input id="sbg_a" value="${esc(cfg.bg_app || '')}" placeholder="Leave blank for default"></div>
+        </div>
+        <div class="r2">
+          <div class="fg"><label>Login Overlay Opacity</label>
+            <input type="range" id="sop_l" min="0" max="1" step="0.05" value="${cfg.op_login || 0.6}" oninput="applyStyles()">
+          </div>
+          <div class="fg"><label>App Overlay Opacity</label>
+            <input type="range" id="sop_a" min="0" max="1" step="0.05" value="${cfg.op_app || 0.4}" oninput="applyStyles()">
+          </div>
+        </div>
+        <button class="btn bp bfl" onclick="saveSettings()">💾 Save Appearance</button>
+      </div>
     </div>
     <div class="card" style="align-self:start">
       <div class="ct_">🔧 Supabase Configuration</div>
@@ -1459,9 +1484,37 @@ async function loadCfg() {
 }
 
 async function saveSettings() {
-  const entries = [['org_name', $('sorg').value.trim() || 'PAFWA APF'], ['location', $('sloc').value.trim() || 'PAC KAMRA'], ['receipt_footer', $('sfoot').value.trim()], ['next_receipt_no', $('srno').value || '1'], ['low_stock_thresh', $('slow').value || '5']];
+  const entries = [
+    ['org_name', $('sorg').value.trim()],
+    ['location', $('sloc').value.trim()],
+    ['receipt_footer', $('sfoot').value.trim()],
+    ['next_receipt_no', $('srno').value],
+    ['low_stock_thresh', $('slow').value],
+    ['theme', $('stheme').value],
+    ['bg_login', $('sbg_l').value.trim()],
+    ['bg_app', $('sbg_a').value.trim()],
+    ['op_login', $('sop_l').value],
+    ['op_app', $('sop_a').value]
+  ];
   await sb.from('settings').upsert(entries.map(([key, value]) => ({ key, value })));
-  addLog('SAVE_SETTINGS', 'Settings updated'); const m = $('smsg'); if (m) { m.className = 'al als'; m.textContent = '✅ Settings saved successfully!'; m.style.display = 'block'; setTimeout(() => m.style.display = 'none', 2500); } toast('Settings saved');
+  addLog('SAVE_SETTINGS', 'Settings updated'); 
+  toast('Settings saved');
+  applyStyles();
+}
+async function applyStyles() {
+  const { data: sets } = await sb.from('settings').select('*');
+  const cfg = {}; (sets || []).forEach(r => cfg[r.key] = r.value);
+  
+  document.body.setAttribute('data-theme', cfg.theme || 'default');
+  
+  const isLogin = $('LOGIN').style.display === 'flex' || $('ADMIN-SCREEN').style.display === 'flex';
+  const bg = isLogin ? (cfg.bg_login || 'login_bg.jpg') : (cfg.bg_app || 'app_bg.jpg');
+  const op = isLogin ? (cfg.op_login || 0.6) : (cfg.op_app || 0.4);
+  
+  const bgw = $('APP-BG-WRAPPER');
+  const bgo = $('APP-BG-OVERLAY');
+  if (bgw) bgw.style.backgroundImage = `url('${bg}')`;
+  if (bgo) bgo.style.backgroundColor = `rgba(var(--bg-rgb), ${op})`;
 }
 async function changeMyPw() {
   const n = $('pwn').value, c = $('pwc').value, msg = $('pwmsg');
@@ -1512,6 +1565,7 @@ async function boot() {
     $('LOAD').style.display = 'none';
     $('LOGIN').style.display = 'flex';
     setupAuth();
+    if (typeof applyStyles === 'function') applyStyles();
   } catch (e) {
     $('LOAD').style.display = 'none';
     const err = $('cfg-err');
