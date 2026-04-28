@@ -656,7 +656,7 @@ async function submitItem(id) {
       imgUrl = publicUrl;
     }
     let catId = $('ficat').value;
-    if (!catId && !id) {
+    if (!catId) { // Trigger even for edits if category is "None"
       const firstWord = name.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').trim();
       if (firstWord) {
         let existing = _cats.find(c => c.name.split(' / ').pop().trim().toLowerCase() === firstWord.toLowerCase());
