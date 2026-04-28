@@ -595,7 +595,13 @@ function openItemM(item = null) {
     <div class="fg"><label>Serial Number</label><input id="fisn" value="${esc(e.serial_number || '')}" placeholder="Auto-generated if blank"></div>
   </div>
   <div class="r3">
-    <div class="fg"><label>Category</label><select id="ficat"><option value="">None</option>${cOpts}</select></div>
+    <div class="fg">
+      <label>Category</label>
+      <div style="display:flex;gap:4px">
+        <select id="ficat" onchange="suggestSN()"><option value="">None</option>${cOpts}</select>
+        <button class="btn bs" style="padding:0 8px; font-weight:bold;" onclick="quickAddCat()">+</button>
+      </div>
+    </div>
     <div class="fg"><label>Location</label><input id="filoc" value="${esc(e.location || '')}" placeholder="Shelf A-3"></div>
     <div class="fg"><label>Date of BOC</label><input id="fiboc" type="date" value="${e.date_of_boc || ''}"></div>
   </div>
@@ -637,9 +643,35 @@ async function submitItem(id) {
       const { data: { publicUrl } } = sb.storage.from('item-images').getPublicUrl(path);
       imgUrl = publicUrl;
     }
-    const sn = $('fisn').value.trim() || `PAF-${String(_items.filter(i => !i.archived).length + 1).padStart(4, '0')}-${Date.now().toString(36).slice(-4).toUpperCase()}`;
+    let catId = $('ficat').value;
+    if (!catId && !id) {
+      const firstWord = name.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').trim();
+      if (firstWord) {
+        // Case-insensitive match against existing categories
+        let existing = _cats.find(c => {
+          const baseName = c.name.split(' / ').pop().trim().toLowerCase();
+          return baseName === firstWord.toLowerCase();
+        });
+        
+        if (!existing) {
+          const { data: newCat } = await sb.from('categories').insert({ name: firstWord }).select().single();
+          if (newCat) { 
+            await refreshInv(); 
+            catId = newCat.id; 
+          }
+        } else { 
+          catId = existing.id; 
+        }
+        if ($('ficat')) $('ficat').value = catId;
+      }
+    }
+    
+    let sn = $('fisn').value.trim();
+    if (!sn && !id) { await suggestSN(); sn = $('fisn').value.trim(); }
+    if (!sn) sn = `PAF-${Date.now().toString(36).toUpperCase()}`; // Ultimate fallback
+    
     const payload = {
-      name, serial_number: sn, category_id: $('ficat').value || null, location: $('filoc').value.trim(), date_of_boc: $('fiboc').value || null,
+      name, serial_number: sn, category_id: catId || null, location: $('filoc').value.trim(), date_of_boc: $('fiboc').value || null,
       cost_price: parseFloat($('ficp').value) || 0, sale_price: parseFloat($('fisp').value) || 0, discount_pct: parseFloat($('fidisc').value) || 0,
       stock_qty: parseInt($('fiq').value) || 0, min_stock_threshold: parseInt($('fimq').value) || 5, unit: $('fiunit').value.trim() || 'pcs',
       description: $('fidesc').value.trim(), image_url: imgUrl, image_path: imgPath, archived: false
@@ -1322,6 +1354,31 @@ function openAddUserM() {
   </div>
   <div class="al alw">After creating, the user can log in immediately with their username and password.</div>
   <div class="mf"><button class="btn bp" onclick="submitAddUser()">Create User</button><button class="btn bs" onclick="closeM()">Cancel</button></div>`, '480px');
+}
+async function quickAddCat() {
+  const n = prompt('Enter new category name:');
+  if (!n) return;
+  const { data, error } = await sb.from('categories').insert({ name: n.trim() }).select().single();
+  if (error) { toast(error.message, 'e'); return; }
+  await refreshInv(); 
+  const sel = $('ficat');
+  if (sel) {
+    sel.innerHTML = '<option value="">None</option>' + _cats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    sel.value = data.id;
+    suggestSN();
+  }
+  toast('Category added');
+}
+async function suggestSN() {
+  const catId = $('ficat').value;
+  const snField = $('fisn');
+  if (!catId) return;
+  const catName = _cats.find(c => c.id === catId)?.name || 'NONE';
+  let code = catName.split(' / ').pop().replace(/\s+/g,'').slice(0, 4).toUpperCase().padEnd(4, 'X');
+  const year = new Date().getFullYear();
+  const { count } = await sb.from('items').select('*', { count: 'exact', head: true }).eq('category_id', catId);
+  const index = String((count || 0) + 1).padStart(3, '0');
+  snField.value = `${code}-${year}-${index}`;
 }
 async function submitAddUser() {
   const u = $('uu').value.trim(), pw = $('upw').value, fn = $('ufn').value.trim(), role = $('ur').value;
