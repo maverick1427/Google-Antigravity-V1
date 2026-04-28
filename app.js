@@ -162,36 +162,7 @@ async function doLogout() {
 
 async function logout() { await sb.auth.signOut(); location.reload(); }
 
-/* PakMac Reveal Observer */
-const revealObs = new IntersectionObserver((ents) => {
-  ents.forEach(e => { 
-    if(e.isIntersecting) { 
-      e.target.classList.add('reveal'); 
-      revealObs.unobserve(e.target); 
-    } 
-  });
-}, { threshold: 0.05 });
 
-function initReveals() {
-  const isV2 = document.body.getAttribute('data-version') === 'v2';
-  document.querySelectorAll('.card, .stat').forEach(c => {
-    if (!isV2) {
-      c.classList.add('reveal');
-    } else {
-      revealObs.observe(c);
-      // Fallback: If it's already in view but hasn't revealed
-      const rect = c.getBoundingClientRect();
-      if(rect.top < window.innerHeight) c.classList.add('reveal');
-    }
-  });
-}
-
-// Override goTo to trigger reveal
-const originalGoTo = window.goTo;
-window.goTo = (p) => {
-  if (typeof originalGoTo === 'function') originalGoTo(p);
-  setTimeout(initReveals, 150);
-};
 
 // ════════════════════════════════════ AUTH LISTENER
 function setupAuth() {
@@ -239,7 +210,7 @@ function goTo(p) {
   document.querySelectorAll('.ni').forEach(e => e.classList.toggle('on', e.dataset.p === p));
   if (window.innerWidth <= 900) closeSidebar();
   if (LOADERS[p]) LOADERS[p]();
-  applyStyles(); // Ensure styles/backgrounds are correct for the current page
+  applyStyles();
 }
 
 // ════════════════════════════════════ DASHBOARD

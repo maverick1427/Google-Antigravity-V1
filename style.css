@@ -21,85 +21,28 @@ body{
   overflow-x:hidden;
 }
 
-/* ── V2 MODERN DESIGN SYSTEM (PAK MAC INSPIRED) ── */
+/* ── V2 MODERN DESIGN SYSTEM ── */
 [data-version="v2"] {
-  --nv: #1b365d; /* Air Force Blue */
-  --bl: #2e5a97; 
-  --bg: #f8fafc; 
-  --tx: #0f172a; 
-  --mt: #64748b; 
+  --nv: #1b365d; --bl: #2e5a97; --bg: #f8fafc; --tx: #0f172a; --mt: #64748b; 
   --br: rgba(0,0,0,0.1);
-  --glass: rgba(255, 255, 255, 0.85); 
-  --glass-br: rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 30px 60px -12px rgba(0, 0, 0, 0.1);
-  --radius: 0px !important; /* Sharp Edges as requested */
+  --glass: rgba(255, 255, 255, 0.7); 
+  --glass-br: rgba(255, 255, 255, 0.1);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
 }
-
-[data-version="v2"] .card, 
-[data-version="v2"] .btn, 
-[data-version="v2"] input, 
-[data-version="v2"] select, 
-[data-version="v2"] .tw { 
-  border-radius: 0px !important; 
-}
-
 [data-version="v2"] .card { 
-  background: var(--glass); 
-  backdrop-filter: blur(15px); 
-  border: 1px solid var(--glass-br);
-  box-shadow: 0 4px 10px rgba(0,0,0,0.03); 
-  transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease;
-  opacity: 0; transform: translateY(30px); /* Initial state for reveal */
+  background: var(--glass); backdrop-filter: blur(10px); border: 1px solid var(--glass-br);
+  border-radius: 12px; box-shadow: var(--shadow); opacity: 1 !important; transform: none !important;
 }
-[data-version="v2"] .card.reveal { opacity: 1; transform: translateY(0); }
-[data-version="v2"] .card:hover { transform: scale(1.015); box-shadow: var(--shadow-lg); z-index: 10; }
-
-[data-version="v2"] .pt { 
-  color: var(--nv); 
-  font-weight: 900; 
-  text-transform: uppercase; 
-  letter-spacing: 3px; 
-  text-shadow: none;
-  border-left: 5px solid var(--nv);
-  padding-left: 15px;
-}
-
-[data-version="v2"] .btn.bp { 
-  background: var(--nv); 
-  color: #fff; 
-  border: 2px solid var(--nv); 
-  text-transform: uppercase; 
-  letter-spacing: 2px;
-}
-[data-version="v2"] .btn.bp:hover { 
-  background: transparent; 
-  color: var(--nv); 
-  transform: none; 
-}
-
-[data-version="v2"] body { background: var(--bg); font-family: 'Assistant', 'Inter', sans-serif; }
 [data-version="v2"] .sidebar { 
   background: var(--glass); backdrop-filter: blur(12px); border-right: 1px solid var(--glass-br);
   margin: 15px; height: calc(100vh - 30px); border-radius: 20px; box-shadow: var(--shadow-lg);
 }
-[data-version="v2"] .card { 
-  background: var(--glass); backdrop-filter: blur(10px); border: 1px solid var(--glass-br);
-  border-radius: 16px; box-shadow: var(--shadow); transition: transform 0.3s ease;
-}
-[data-version="v2"] .card:hover { transform: translateY(-5px); }
-[data-version="v2"] .top-bar { 
-  background: var(--glass); backdrop-filter: blur(10px); border-bottom: 1px solid var(--glass-br);
-  margin: 15px 15px 0 0; border-radius: 15px; box-shadow: var(--shadow);
-}
-
-/* Mobile Bottom Nav for V2 */
 #MOBILE-NAV { display: none; position: fixed; bottom: 0; left: 0; width: 100%; height: 70px; background: var(--glass); backdrop-filter: blur(15px); border-top: 1px solid var(--glass-br); z-index: 1000; justify-content: space-around; align-items: center; padding: 0 10px; }
 [data-version="v2"] #MOBILE-NAV { display: flex; }
 @media (min-width: 901px) { #MOBILE-NAV { display: none !important; } }
 @media (max-width: 900px) { 
   [data-version="v2"] .sidebar { display: none; }
   [data-version="v2"] .main-content { margin-left: 0; padding-bottom: 90px; }
-  [data-version="v2"] .top-bar { margin: 10px; }
 }
 
 #APP-BG-WRAPPER {
