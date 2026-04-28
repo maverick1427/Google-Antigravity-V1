@@ -658,7 +658,7 @@ async function submitItem(id) {
     }
     
     let sn = $('fisn').value.trim();
-    if (!sn && !id) { 
+    if (!sn) { 
       sn = await suggestSN(catId); 
       if($('fisn')) $('fisn').value = sn;
     }
