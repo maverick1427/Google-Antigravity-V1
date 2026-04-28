@@ -1449,20 +1449,25 @@ async function loadCfg() {
         <button class="btn bs bfl" onclick="changeMyPw()">Update Password</button>
       </div>
       <div class="card" style="margin-top:16px">
-        <div class="ct_">🎨 Appearance & Theme</div>
-        <div class="fg"><label>Theme Selection</label>
-          <select id="stheme" onchange="applyStyles()">
-            <option value="default"${cfg.theme === 'default' ? ' selected' : ''}>Default (Professional)</option>
-            <option value="dark"${cfg.theme === 'dark' ? ' selected' : ''}>Dark Mode</option>
-            <option value="light"${cfg.theme === 'light' ? ' selected' : ''}>Light Mode</option>
-            <option value="cyberpunk"${cfg.theme === 'cyberpunk' ? ' selected' : ''}>Cyberpunk (Neon)</option>
-          </select>
-        </div>
+        <div class="ct_">🖼️ Background Customization</div>
+        <div class="al ali" style="font-size:12px;margin-bottom:12px">Upload images directly from your computer. They will be saved to your system and visible on all devices.</div>
+        
         <div class="r2">
-          <div class="fg"><label>Login Background URL</label><input id="sbg_l" value="${esc(cfg.bg_login || '')}" placeholder="Leave blank for default"></div>
-          <div class="fg"><label>App Background URL</label><input id="sbg_a" value="${esc(cfg.bg_app || '')}" placeholder="Leave blank for default"></div>
+          <div class="fg"><label>Login Screen Background</label>
+            <div style="display:flex;gap:8px">
+               <button class="btn bs bfl" onclick="uploadBg('login')">📤 Upload Image</button>
+               <button class="btn bd bfl" onclick="clearBg('login')">🗑️ Reset</button>
+            </div>
+          </div>
+          <div class="fg"><label>Main App Background</label>
+            <div style="display:flex;gap:8px">
+               <button class="btn bs bfl" onclick="uploadBg('app')">📤 Upload Image</button>
+               <button class="btn bd bfl" onclick="clearBg('app')">🗑️ Reset</button>
+            </div>
+          </div>
         </div>
-        <div class="r2">
+
+        <div class="r2" style="margin-top:16px">
           <div class="fg"><label>Login Overlay Opacity</label>
             <input type="range" id="sop_l" min="0" max="1" step="0.05" value="${cfg.op_login || 0.6}" oninput="applyStyles()">
           </div>
@@ -1470,7 +1475,7 @@ async function loadCfg() {
             <input type="range" id="sop_a" min="0" max="1" step="0.05" value="${cfg.op_app || 0.4}" oninput="applyStyles()">
           </div>
         </div>
-        <button class="btn bp bfl" onclick="saveSettings()">💾 Save Appearance</button>
+        <button class="btn bp bfl" onclick="saveSettings()">💾 Save Opacity Settings</button>
       </div>
     </div>
     <div class="card" style="align-self:start">
@@ -1490,32 +1495,34 @@ async function saveSettings() {
     ['receipt_footer', $('sfoot').value.trim()],
     ['next_receipt_no', $('srno').value],
     ['low_stock_thresh', $('slow').value],
-    ['theme', $('stheme').value],
-    ['bg_login', $('sbg_l').value.trim()],
-    ['bg_app', $('sbg_a').value.trim()],
     ['op_login', $('sop_l').value],
     ['op_app', $('sop_a').value]
   ];
   await sb.from('settings').upsert(entries.map(([key, value]) => ({ key, value })));
-  addLog('SAVE_SETTINGS', 'Settings updated'); 
-  toast('Settings saved');
-  applyStyles();
+  addLog('SAVE_SETTINGS', 'Settings updated'); toast('Settings saved'); applyStyles();
 }
 async function applyStyles() {
   const { data: sets } = await sb.from('settings').select('*');
   const cfg = {}; (sets || []).forEach(r => cfg[r.key] = r.value);
-  
-  document.body.setAttribute('data-theme', cfg.theme || 'default');
-  
   const isLogin = $('LOGIN').style.display === 'flex' || $('ADMIN-SCREEN').style.display === 'flex';
   const bg = isLogin ? (cfg.bg_login || 'login_bg.jpg') : (cfg.bg_app || 'app_bg.jpg');
   const op = isLogin ? (cfg.op_login || 0.6) : (cfg.op_app || 0.4);
-  
-  const bgw = $('APP-BG-WRAPPER');
-  const bgo = $('APP-BG-OVERLAY');
+  const bgw = $('APP-BG-WRAPPER'); const bgo = $('APP-BG-OVERLAY');
   if (bgw) bgw.style.backgroundImage = `url('${bg}')`;
-  if (bgo) bgo.style.backgroundColor = `rgba(var(--bg-rgb), ${op})`;
+  if (bgo) bgo.style.backgroundColor = `rgba(var(--bg-rgb, 248,250,252), ${op})`;
 }
+function uploadBg(type) {
+  const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*';
+  i.onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { toast('Image too large (max 2MB)', 'e'); return; }
+    const r = new FileReader(); r.onload = async ev => {
+      const b64 = ev.target.result; const key = type === 'login' ? 'bg_login' : 'bg_app';
+      await sb.from('settings').upsert({ key, value: b64 }); toast('Background uploaded!'); applyStyles();
+    }; r.readAsDataURL(f);
+  }; i.click();
+}
+async function clearBg(type) { if (!confirm('Reset this background?')) return; const key = type === 'login' ? 'bg_login' : 'bg_app'; await sb.from('settings').delete().eq('key', key); toast('Background reset'); applyStyles(); }
 async function changeMyPw() {
   const n = $('pwn').value, c = $('pwc').value, msg = $('pwmsg');
   if (!n) { msg.className = 'al ale'; msg.textContent = 'Enter new password'; msg.style.display = 'block'; return; }
