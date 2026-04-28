@@ -647,28 +647,22 @@ async function submitItem(id) {
     if (!catId && !id) {
       const firstWord = name.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').trim();
       if (firstWord) {
-        // Case-insensitive match against existing categories
-        let existing = _cats.find(c => {
-          const baseName = c.name.split(' / ').pop().trim().toLowerCase();
-          return baseName === firstWord.toLowerCase();
-        });
-        
+        let existing = _cats.find(c => c.name.split(' / ').pop().trim().toLowerCase() === firstWord.toLowerCase());
         if (!existing) {
           const { data: newCat } = await sb.from('categories').insert({ name: firstWord }).select().single();
-          if (newCat) { 
-            await refreshInv(); 
-            catId = newCat.id; 
-          }
+          if (newCat) { await refreshInv(); catId = newCat.id; if($('ficat')) $('ficat').value = catId; }
         } else { 
-          catId = existing.id; 
+          catId = existing.id; if($('ficat')) $('ficat').value = catId;
         }
-        if ($('ficat')) $('ficat').value = catId;
       }
     }
     
     let sn = $('fisn').value.trim();
-    if (!sn && !id) { await suggestSN(); sn = $('fisn').value.trim(); }
-    if (!sn) sn = `PAF-${Date.now().toString(36).toUpperCase()}`; // Ultimate fallback
+    if (!sn && !id) { 
+      sn = await suggestSN(catId); 
+      if($('fisn')) $('fisn').value = sn;
+    }
+    if (!sn) sn = `PAF-${Date.now().toString(36).toUpperCase()}`;
     
     const payload = {
       name, serial_number: sn, category_id: catId || null, location: $('filoc').value.trim(), date_of_boc: $('fiboc').value || null,
@@ -1369,16 +1363,17 @@ async function quickAddCat() {
   }
   toast('Category added');
 }
-async function suggestSN() {
-  const catId = $('ficat').value;
-  const snField = $('fisn');
-  if (!catId) return;
+async function suggestSN(providedCatId = null) {
+  const catId = providedCatId || $('ficat').value;
+  if (!catId) return '';
   const catName = _cats.find(c => c.id === catId)?.name || 'NONE';
   let code = catName.split(' / ').pop().replace(/\s+/g,'').slice(0, 4).toUpperCase().padEnd(4, 'X');
   const year = new Date().getFullYear();
   const { count } = await sb.from('items').select('*', { count: 'exact', head: true }).eq('category_id', catId);
   const index = String((count || 0) + 1).padStart(3, '0');
-  snField.value = `${code}-${year}-${index}`;
+  const finalSn = `${code}-${year}-${index}`;
+  if ($('fisn')) $('fisn').value = finalSn;
+  return finalSn;
 }
 async function submitAddUser() {
   const u = $('uu').value.trim(), pw = $('upw').value, fn = $('ufn').value.trim(), role = $('ur').value;
