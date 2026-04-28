@@ -21,52 +21,63 @@ body{
   overflow-x:hidden;
 }
 
-/* ── V2 MODERN DESIGN SYSTEM ── */
+/* ── V2 MODERN DESIGN SYSTEM (PAK MAC INSPIRED) ── */
 [data-version="v2"] {
   --nv: #1b365d; /* Air Force Blue */
   --bl: #2e5a97; 
-  --bg: #f1f5f9; 
+  --bg: #f8fafc; 
   --tx: #0f172a; 
   --mt: #64748b; 
-  --br: rgba(255,255,255,0.6);
-  --glass: rgba(255, 255, 255, 0.75); 
-  --glass-br: rgba(255, 255, 255, 0.5);
-  --shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+  --br: rgba(0,0,0,0.1);
+  --glass: rgba(255, 255, 255, 0.85); 
+  --glass-br: rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 30px 60px -12px rgba(0, 0, 0, 0.1);
+  --radius: 0px !important; /* Sharp Edges as requested */
 }
-[data-version="v2"][data-theme="dark"] {
-  --nv: #3b82f6; 
-  --bl: #60a5fa; 
-  --bg: #020617; 
-  --tx: #f8fafc; 
-  --mt: #94a3b8; 
-  --br: rgba(255,255,255,0.08);
-  --glass: rgba(15, 23, 42, 0.8); 
-  --glass-br: rgba(255, 255, 255, 0.1);
+
+[data-version="v2"] .card, 
+[data-version="v2"] .btn, 
+[data-version="v2"] input, 
+[data-version="v2"] select, 
+[data-version="v2"] .tw { 
+  border-radius: 0px !important; 
 }
+
+[data-version="v2"] .card { 
+  background: var(--glass); 
+  backdrop-filter: blur(15px); 
+  border: 1px solid var(--glass-br);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.03); 
+  transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease;
+  opacity: 0; transform: translateY(30px); /* Initial state for reveal */
+}
+[data-version="v2"] .card.reveal { opacity: 1; transform: translateY(0); }
+[data-version="v2"] .card:hover { transform: scale(1.015); box-shadow: var(--shadow-lg); z-index: 10; }
 
 [data-version="v2"] .pt { 
   color: var(--nv); 
-  font-weight: 800; 
+  font-weight: 900; 
   text-transform: uppercase; 
-  letter-spacing: 2px; 
-  text-shadow: 0 2px 4px rgba(255,255,255,0.5);
-  animation: slideIn 0.5s ease-out;
+  letter-spacing: 3px; 
+  text-shadow: none;
+  border-left: 5px solid var(--nv);
+  padding-left: 15px;
 }
-[data-version="v2"] .ct_ { 
+
+[data-version="v2"] .btn.bp { 
+  background: var(--nv); 
+  color: #fff; 
+  border: 2px solid var(--nv); 
+  text-transform: uppercase; 
+  letter-spacing: 2px;
+}
+[data-version="v2"] .btn.bp:hover { 
+  background: transparent; 
   color: var(--nv); 
-  font-weight: 700; 
-  border-bottom: 2px solid var(--nv); 
-  padding-bottom: 8px; 
-  margin-bottom: 15px; 
-}
-[data-version="v2"] label { color: var(--nv); font-weight: 600; opacity: 0.85; }
-
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  transform: none; 
 }
 
-[data-version="v2"] body { background: var(--bg); font-family: 'Inter', sans-serif; }
+[data-version="v2"] body { background: var(--bg); font-family: 'Assistant', 'Inter', sans-serif; }
 [data-version="v2"] .sidebar { 
   background: var(--glass); backdrop-filter: blur(12px); border-right: 1px solid var(--glass-br);
   margin: 15px; height: calc(100vh - 30px); border-radius: 20px; box-shadow: var(--shadow-lg);
@@ -118,7 +129,29 @@ body{
 .dynamic-logo-container img {
   width: 100%; height: 100%; object-fit: contain;
   filter: drop-shadow(0 8px 16px rgba(0,0,0,0.3));
-  animation: floatLogo 4s ease-in-out infinite;
+  async function logout() { await sb.auth.signOut(); location.reload(); }
+
+/* PakMac Reveal Observer */
+const revealObs = new IntersectionObserver((ents) => {
+  ents.forEach(e => { if(e.isIntersecting) { e.target.classList.add('reveal'); revealObs.unobserve(e.target); } });
+}, { threshold: 0.1 });
+
+function initReveals() {
+  if (document.body.getAttribute('data-version') !== 'v2') {
+    document.querySelectorAll('.card').forEach(c => c.classList.add('reveal')); // Instant reveal for V1
+    return;
+  }
+  document.querySelectorAll('.card').forEach(c => revealObs.observe(c));
+}
+
+// Update goTo to trigger reveal
+const oldGoTo = window.goTo;
+window.goTo = function(p) {
+  if(typeof oldGoTo === 'function') oldGoTo(p);
+  setTimeout(initReveals, 100);
+};
+
+initSB();
 }
 @keyframes floatLogo {
   0% { transform: translateY(0px) scale(1); }

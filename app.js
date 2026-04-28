@@ -153,12 +153,35 @@ async function doLogin() {
   }
 }
 
-async function doLogout() {
-  if (!confirm('Logout?')) return;
-  await addLog('LOGOUT', `${CU?.username} logged out`);
-  await sb.auth.signOut();
-  location.reload(); // Force reload to clear all sensitive state and return to login
+async function logout() { await sb.auth.signOut(); location.reload(); }
+
+/* PakMac Reveal Observer */
+const revealObs = new IntersectionObserver((ents) => {
+  ents.forEach(e => { 
+    if(e.isIntersecting) { 
+      e.target.classList.add('reveal'); 
+      revealObs.unobserve(e.target); 
+    } 
+  });
+}, { threshold: 0.05 });
+
+function initReveals() {
+  const isV2 = document.body.getAttribute('data-version') === 'v2';
+  document.querySelectorAll('.card').forEach(c => {
+    if (!isV2) {
+      c.classList.add('reveal');
+    } else {
+      revealObs.observe(c);
+    }
+  });
 }
+
+// Override goTo to trigger reveal
+const originalGoTo = window.goTo;
+window.goTo = (p) => {
+  if (typeof originalGoTo === 'function') originalGoTo(p);
+  setTimeout(initReveals, 150);
+};
 
 // ════════════════════════════════════ AUTH LISTENER
 function setupAuth() {
@@ -536,17 +559,6 @@ async function importExcel(input) {
     }
   };
   reader.readAsArrayBuffer(f);
-}
-
-async function refreshInv() {
-  const [cR, iR] = await Promise.all([
-    sb.from('categories').select('*').order('name'),
-    sb.from('items').select('*,categories(name)').order('name')
-  ]);
-  _cats = cR.data || []; _items = iR.data || [];
-  const sel = $('icat');
-  if (sel) { const v = sel.value; sel.innerHTML = '<option value="">All Categories</option>' + _cats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join(''); sel.value = v; }
-  renderInv();
 }
 
 function renderInv() {
