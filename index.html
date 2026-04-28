@@ -54,6 +54,9 @@
     </div>
     <div class="card-title">Create Administrator</div>
     <div class="card-sub">First time setup — create your administrator account</div>
+    <div style="text-align:center;margin-bottom:10px;">
+        <button class="link-btn" style="color:var(--rd); font-weight:bold;" onclick="if(confirm('Reset all settings?')) { localStorage.clear(); location.reload(); }">⚠️ Emergency Reset System</button>
+    </div>
     <div class="card-center" style="margin-bottom:20px"><span class="card-badge">ONE TIME ONLY</span></div>
     <div id="adm-err" class="al ale" style="display:none"></div>
     <div class="r2">

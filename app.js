@@ -1,4 +1,5 @@
 'use strict';
+window.addEventListener('keydown',e=>{if(e.shiftKey&&e.key==='R'){if(confirm('Emergency Reset?')){localStorage.clear();location.reload();}}});
 
 // ════════════════════════════════════ SUPABASE INIT
 const LS_URL = 'pafwa_sb_url', LS_KEY = 'pafwa_sb_key';
@@ -12,7 +13,16 @@ const fmtM = n => 'Rs. ' + Number(n || 0).toLocaleString('en-PK', { minimumFract
 const fmtD = s => { if (!s) return '—'; const d = new Date(s); return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-'); };
 const fmtDT = s => { if (!s) return '—'; const d = new Date(s); return d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }); };
 
-function getCfg() { return { url: localStorage.getItem(LS_URL) || '', key: localStorage.getItem(LS_KEY) || '' }; }
+function getCfg() { 
+  let url = localStorage.getItem(LS_URL) || '';
+  const key = localStorage.getItem(LS_KEY) || '';
+  if (url) {
+    url = url.replace(/\/+$/, ""); 
+    if (url.endsWith("/rest/v1")) url = url.slice(0, -8);
+    if (url.endsWith("/auth/v1")) url = url.slice(0, -8);
+  }
+  return { url, key }; 
+}
 function hasCfg() { const c = getCfg(); return !!(c.url && c.key); }
 
 function initSB(url, key) {
