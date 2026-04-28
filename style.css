@@ -25,16 +25,50 @@ body{
 
 /* ── V2 MODERN DESIGN SYSTEM ── */
 [data-version="v2"] {
-  --nv: #6366f1; --bl: #818cf8; --bg: #f8fafc; --tx: #1e293b; --mt: #94a3b8; --br: rgba(255,255,255,0.5);
-  --glass: rgba(255, 255, 255, 0.7); --glass-br: rgba(255, 255, 255, 0.4);
-  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --nv: #1b365d; /* Air Force Blue */
+  --bl: #2e5a97; 
+  --bg: #f1f5f9; 
+  --tx: #0f172a; 
+  --mt: #64748b; 
+  --br: rgba(255,255,255,0.6);
+  --glass: rgba(255, 255, 255, 0.75); 
+  --glass-br: rgba(255, 255, 255, 0.5);
+  --shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
 }
 [data-version="v2"][data-theme="dark"] {
-  --nv: #818cf8; --bl: #a5b4fc; --bg: #0f172a; --tx: #f8fafc; --mt: #94a3b8; --br: rgba(255,255,255,0.1);
-  --glass: rgba(15, 23, 42, 0.7); --glass-br: rgba(255, 255, 255, 0.1);
+  --nv: #3b82f6; 
+  --bl: #60a5fa; 
+  --bg: #020617; 
+  --tx: #f8fafc; 
+  --mt: #94a3b8; 
+  --br: rgba(255,255,255,0.08);
+  --glass: rgba(15, 23, 42, 0.8); 
+  --glass-br: rgba(255, 255, 255, 0.1);
 }
 
-[data-version="v2"] body { background: var(--bg); }
+[data-version="v2"] .pt { 
+  color: var(--nv); 
+  font-weight: 800; 
+  text-transform: uppercase; 
+  letter-spacing: 2px; 
+  text-shadow: 0 2px 4px rgba(255,255,255,0.5);
+  animation: slideIn 0.5s ease-out;
+}
+[data-version="v2"] .ct_ { 
+  color: var(--nv); 
+  font-weight: 700; 
+  border-bottom: 2px solid var(--nv); 
+  padding-bottom: 8px; 
+  margin-bottom: 15px; 
+}
+[data-version="v2"] label { color: var(--nv); font-weight: 600; opacity: 0.85; }
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+[data-version="v2"] body { background: var(--bg); font-family: 'Inter', sans-serif; }
 [data-version="v2"] .sidebar { 
   background: var(--glass); backdrop-filter: blur(12px); border-right: 1px solid var(--glass-br);
   margin: 15px; height: calc(100vh - 30px); border-radius: 20px; box-shadow: var(--shadow-lg);
