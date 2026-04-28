@@ -34,7 +34,13 @@ function hasCfg() { const c = getCfg(); return !!(c.url && c.key); }
 function initSB(url, key) {
   try {
     console.log("Supabase Init:", url);
-    sb = supabase.createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } });
+    sb = supabase.createClient(url, key, {
+      auth: {
+        storage: window.sessionStorage,
+        persistSession: true,
+        autoRefreshToken: true
+      }
+    });
     return true;
   }
   catch (e) { return false; }
