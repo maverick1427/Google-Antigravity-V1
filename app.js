@@ -1,5 +1,11 @@
 'use strict';
-window.addEventListener('keydown',e=>{if(e.shiftKey&&e.key==='R'){if(confirm('Emergency Reset?')){localStorage.clear();location.reload();}}});
+window.addEventListener('keydown', e => { if (e.shiftKey && e.key === 'R') { if (confirm('Emergency Reset?')) { localStorage.clear(); location.reload(); } } });
+
+// ════════════════════════════════════ HARDCODED CONFIGURATION
+// To avoid entering the URL and Key on every new device, paste them here:
+// IMPORTANT: Only use the "anon" "public" key! Never use the "service_role" key.
+const HARDCODED_URL = 'https://isxefzwqtsiimhsfiuet.supabase.co';
+const HARDCODED_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlzeGVmendxdHNpaW1oc2ZpdWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNjYxOTksImV4cCI6MjA5Mjg0MjE5OX0.c7rxoBQOPzOrfB9WAc-UXR9bS5GkSUA-nxA5pQwysXc';
 
 // ════════════════════════════════════ SUPABASE INIT
 const LS_URL = 'pafwa_sb_url', LS_KEY = 'pafwa_sb_key';
@@ -13,23 +19,23 @@ const fmtM = n => 'Rs. ' + Number(n || 0).toLocaleString('en-PK', { minimumFract
 const fmtD = s => { if (!s) return '—'; const d = new Date(s); return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-'); };
 const fmtDT = s => { if (!s) return '—'; const d = new Date(s); return d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }); };
 
-function getCfg() { 
-  let url = localStorage.getItem(LS_URL) || '';
-  const key = localStorage.getItem(LS_KEY) || '';
+function getCfg() {
+  let url = HARDCODED_URL || localStorage.getItem(LS_URL) || '';
+  const key = HARDCODED_KEY || localStorage.getItem(LS_KEY) || '';
   if (url) {
-    url = url.replace(/\/+$/, ""); 
+    url = url.replace(/\/+$/, "");
     if (url.endsWith("/rest/v1")) url = url.slice(0, -8);
     if (url.endsWith("/auth/v1")) url = url.slice(0, -8);
   }
-  return { url, key }; 
+  return { url, key };
 }
 function hasCfg() { const c = getCfg(); return !!(c.url && c.key); }
 
 function initSB(url, key) {
-  try { 
+  try {
     console.log("Supabase Init:", url);
-    sb = supabase.createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } }); 
-    return true; 
+    sb = supabase.createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } });
+    return true;
   }
   catch (e) { return false; }
 }
@@ -84,14 +90,14 @@ function saveCfgAndInit() {
   const key = $('cfg-key').value.trim();
   const err = $('cfg-err');
   if (!url || !key) { err.textContent = 'Both fields are required'; err.style.display = 'block'; return; }
-  
+
   // Clean URL: remove trailing slashes and common extra paths like /rest/v1
-  url = url.replace(/\/+$/, ""); 
+  url = url.replace(/\/+$/, "");
   if (url.endsWith("/rest/v1")) url = url.slice(0, -8);
   if (url.endsWith("/auth/v1")) url = url.slice(0, -8);
 
   if (!url.includes('supabase.co')) { err.textContent = 'URL must be a valid .supabase.co address'; err.style.display = 'block'; return; }
-  
+
   localStorage.setItem(LS_URL, url); localStorage.setItem(LS_KEY, key);
   $('CFG-SCREEN').style.display = 'none';
   boot();
@@ -147,7 +153,6 @@ async function doLogout() {
   await sb.auth.signOut();
   location.reload(); // Force reload to clear all sensitive state and return to login
 }
-}
 
 // ════════════════════════════════════ AUTH LISTENER
 function setupAuth() {
@@ -184,14 +189,14 @@ function setupAuth() {
 // ════════════════════════════════════ NAVIGATION
 document.querySelectorAll('.ni[data-p]').forEach(b => b.addEventListener('click', () => goTo(b.dataset.p)));
 const adminPages = ['logs', 'users'];
-document.querySelectorAll('.ni.adm').forEach((b, i) => { const p = ['logs', 'users'][i]; if(p){ b.dataset.p = p; b.addEventListener('click', () => goTo(p));} });
+document.querySelectorAll('.ni.adm').forEach((b, i) => { const p = ['logs', 'users'][i]; if (p) { b.dataset.p = p; b.addEventListener('click', () => goTo(p)); } });
 
 const LOADERS = { dash: loadDash, inv: loadInv, pos: loadPOS, rcpt: loadRcpt, acct: loadAcct, rep: loadRep, logs: loadLogs, users: loadUsers, bkp: loadBkp, cfg: loadCfg };
 function goTo(p) {
   if (adminPages.includes(p) && CU?.role !== 'admin') { toast('Admin only', 'e'); return; }
   document.querySelectorAll('.pg').forEach(e => e.classList.remove('on'));
   const pg = $('page-' + p);
-  if(pg) pg.classList.add('on');
+  if (pg) pg.classList.add('on');
   document.querySelectorAll('.ni').forEach(e => e.classList.toggle('on', e.dataset.p === p));
   if (window.innerWidth <= 900) closeSidebar();
   if (LOADERS[p]) LOADERS[p]();
@@ -313,213 +318,213 @@ async function importExcel(input) {
   const f = input.files[0];
   if (!f) return;
   toast('Reading Excel file...', 'i');
-  
+
   const over = $('import-overlay');
   const bar = $('import-bar');
   const txt = $('import-txt');
   const logBox = $('import-log');
-  if(over) over.style.display = 'flex';
-  if(logBox) logBox.innerHTML = '';
+  if (over) over.style.display = 'flex';
+  if (logBox) logBox.innerHTML = '';
 
-  const lg = (msg, isErr=false) => {
-      if(!logBox) return;
-      const d = document.createElement('div');
-      d.textContent = '> ' + msg;
-      if(isErr) d.style.color = '#ef4444';
-      logBox.appendChild(d);
-      logBox.scrollTop = logBox.scrollHeight;
+  const lg = (msg, isErr = false) => {
+    if (!logBox) return;
+    const d = document.createElement('div');
+    d.textContent = '> ' + msg;
+    if (isErr) d.style.color = '#ef4444';
+    logBox.appendChild(d);
+    logBox.scrollTop = logBox.scrollHeight;
   };
-  
+
   const reader = new FileReader();
   reader.onload = async (e) => {
     try {
       lg('File loaded into memory. Parsing Excel data...');
-      if(typeof XLSX === 'undefined') throw new Error('SheetJS not loaded yet, please refresh the page.');
+      if (typeof XLSX === 'undefined') throw new Error('SheetJS not loaded yet, please refresh the page.');
       const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, {type: 'array', cellDates: true});
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
       if (!workbook.SheetNames.length) throw new Error('No sheets found in excel');
-      
+
       let count = 0;
       let errCount = 0;
       let totalSheets = workbook.SheetNames.length;
       let curIdx = 0;
-      
+
       for (const sheetName of workbook.SheetNames) {
         curIdx++;
-        if(txt) txt.textContent = `Processing sheet ${curIdx} of ${totalSheets}...`;
+        if (txt) txt.textContent = `Processing sheet ${curIdx} of ${totalSheets}...`;
         lg(`\n--- Sheet: ${sheetName} ---`);
         await new Promise(r => setTimeout(r, 10));
-        
+
         const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet, {header: 1, defval: ''});
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
         lg(`Found ${rows.length} rows.`);
         if (!rows || rows.length < 2) { lg('Not enough rows, skipping.'); continue; }
-        
+
         let cur = null;
         let lastSeenName = '';
-        
+
         const saveItem = async (it) => {
-           if (!it) return;
-           if (!it.name && lastSeenName) {
-               it.name = lastSeenName;
-               lg(`Inheriting name '${it.name}' for sub-category ${it.code}`);
-           }
-           if (!it.name) {
-               lg(`Skipping item with code '${it.code}' because no name was found.`, true);
-               return;
-           }
-           
-           lastSeenName = it.name;
-           
-           let validDate = null;
-           if (it.date) {
-               if (it.date instanceof Date) {
-                   validDate = it.date.toISOString().split('T')[0];
-               } else if (typeof it.date === 'number' && it.date > 10000 && it.date < 100000) {
-                   // Handle Excel serial date
-                   const d = new Date(Math.round((it.date - 25569) * 86400 * 1000));
-                   validDate = d.toISOString().split('T')[0];
-               } else {
-                   const ds = String(it.date).trim();
-                   let parts = ds.split(/[-/]/);
-                   if (parts.length === 3) {
-                       // Try to detect DD/MM/YYYY or YYYY/MM/DD
-                       let y = parts[2], m = parts[1], d = parts[0];
-                       if (y.length < 4 && d.length === 4) [y, d] = [d, y]; // swap if YYYY/MM/DD
-                       if (y.length >= 4) {
-                           validDate = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
-                       }
-                   }
-                   if (!validDate) {
-                       const d = new Date(it.date);
-                       if (!isNaN(d.getTime())) validDate = d.toISOString().split('T')[0];
-                   }
-               }
-           }
+          if (!it) return;
+          if (!it.name && lastSeenName) {
+            it.name = lastSeenName;
+            lg(`Inheriting name '${it.name}' for sub-category ${it.code}`);
+          }
+          if (!it.name) {
+            lg(`Skipping item with code '${it.code}' because no name was found.`, true);
+            return;
+          }
 
-           const payload = {
-             name: it.name,
-             serial_number: it.code || null,
-             stock_qty: it.qty,
-             cost_price: it.cost,
-             sale_price: it.price
-           };
-           if (validDate) payload.date_of_boc = validDate;
+          lastSeenName = it.name;
 
-           lg(`Attempting to save item: [${it.code||'NO-CODE'}] ${it.name} (Qty: ${it.qty}, Cost: ${it.cost}, Price: ${it.price}, Date: ${validDate||'none'})`);
+          let validDate = null;
+          if (it.date) {
+            if (it.date instanceof Date) {
+              validDate = it.date.toISOString().split('T')[0];
+            } else if (typeof it.date === 'number' && it.date > 10000 && it.date < 100000) {
+              // Handle Excel serial date
+              const d = new Date(Math.round((it.date - 25569) * 86400 * 1000));
+              validDate = d.toISOString().split('T')[0];
+            } else {
+              const ds = String(it.date).trim();
+              let parts = ds.split(/[-/]/);
+              if (parts.length === 3) {
+                // Try to detect DD/MM/YYYY or YYYY/MM/DD
+                let y = parts[2], m = parts[1], d = parts[0];
+                if (y.length < 4 && d.length === 4) [y, d] = [d, y]; // swap if YYYY/MM/DD
+                if (y.length >= 4) {
+                  validDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+                }
+              }
+              if (!validDate) {
+                const d = new Date(it.date);
+                if (!isNaN(d.getTime())) validDate = d.toISOString().split('T')[0];
+              }
+            }
+          }
 
-           const { error } = await sb.from('items').insert(payload);
-           if (!error) {
-               count++;
-               lg(`SUCCESS: Saved ${it.name}`);
-           } else {
-               if (error.code === '23505' && it.code) {
-                   lg(`Duplicate SN detected for ${it.code}. Attempting to update instead...`);
-                   const { error: upErr } = await sb.from('items').update(payload).eq('serial_number', it.code);
-                   if (!upErr) {
-                       count++;
-                       lg(`SUCCESS: Updated ${it.name}`);
-                   } else { 
-                       errCount++; 
-                       lg(`ERROR: Update failed for ${it.name}: ${upErr.message}`, true); 
-                   }
-               } else {
-                   errCount++;
-                   lg(`ERROR: Insert failed for ${it.name}: ${error.message}`, true);
-               }
-           }
+          const payload = {
+            name: it.name,
+            serial_number: it.code || null,
+            stock_qty: it.qty,
+            cost_price: it.cost,
+            sale_price: it.price
+          };
+          if (validDate) payload.date_of_boc = validDate;
+
+          lg(`Attempting to save item: [${it.code || 'NO-CODE'}] ${it.name} (Qty: ${it.qty}, Cost: ${it.cost}, Price: ${it.price}, Date: ${validDate || 'none'})`);
+
+          const { error } = await sb.from('items').insert(payload);
+          if (!error) {
+            count++;
+            lg(`SUCCESS: Saved ${it.name}`);
+          } else {
+            if (error.code === '23505' && it.code) {
+              lg(`Duplicate SN detected for ${it.code}. Attempting to update instead...`);
+              const { error: upErr } = await sb.from('items').update(payload).eq('serial_number', it.code);
+              if (!upErr) {
+                count++;
+                lg(`SUCCESS: Updated ${it.name}`);
+              } else {
+                errCount++;
+                lg(`ERROR: Update failed for ${it.name}: ${upErr.message}`, true);
+              }
+            } else {
+              errCount++;
+              lg(`ERROR: Insert failed for ${it.name}: ${error.message}`, true);
+            }
+          }
         };
-        
-        for (let r=0; r<rows.length; r++) {
+
+        for (let r = 0; r < rows.length; r++) {
           // Update progress bar per row if there are many rows
           if (r % 100 === 0) {
-             if(bar) bar.style.width = Math.round((r / rows.length) * 100) + '%';
-             await new Promise(res => setTimeout(res, 5)); // yield to UI
+            if (bar) bar.style.width = Math.round((r / rows.length) * 100) + '%';
+            await new Promise(res => setTimeout(res, 5)); // yield to UI
           }
 
           const rowStr = rows[r].map(v => String(v || '')).join(' ').toLowerCase();
           const col0 = rows[r][0];
           const col1 = rows[r][1] ? String(rows[r][1]).trim() : '';
-          
+
           // Skip if this is a header row repeating the item name column
           if (col1.toLowerCase() === 'item name') continue;
 
           if (rowStr.includes('item code')) {
-             if (cur && (cur.name || cur.code)) await saveItem(cur);
-             lg(`Found 'Item Code' header at row ${r+1}`);
-             cur = { code: '', name: '', cost: 0, price: 0, qty: 0, date: '', hIdx: -1, cIdx: -1, pIdx: -1, bIdx: -1 };
-             for (let c=0; c<rows[r].length; c++) {
-               if (String(rows[r][c]).trim().toLowerCase().includes('item code')) {
-                 cur.code = String(rows[r][c+1] || rows[r][c+2] || '').trim();
-                 if(!cur.code && rows[r+1] && rows[r+1][c]) {
-                     cur.code = String(rows[r+1][c]).trim();
-                 }
-               }
-             }
+            if (cur && (cur.name || cur.code)) await saveItem(cur);
+            lg(`Found 'Item Code' header at row ${r + 1}`);
+            cur = { code: '', name: '', cost: 0, price: 0, qty: 0, date: '', hIdx: -1, cIdx: -1, pIdx: -1, bIdx: -1 };
+            for (let c = 0; c < rows[r].length; c++) {
+              if (String(rows[r][c]).trim().toLowerCase().includes('item code')) {
+                cur.code = String(rows[r][c + 1] || rows[r][c + 2] || '').trim();
+                if (!cur.code && rows[r + 1] && rows[r + 1][c]) {
+                  cur.code = String(rows[r + 1][c]).trim();
+                }
+              }
+            }
           } else if (!cur && (rowStr.includes('cost price') || rowStr.includes('sale price'))) {
-             cur = { code: '', name: '', cost: 0, price: 0, qty: 0, date: '', hIdx: -1, cIdx: -1, pIdx: -1, bIdx: -1 };
+            cur = { code: '', name: '', cost: 0, price: 0, qty: 0, date: '', hIdx: -1, cIdx: -1, pIdx: -1, bIdx: -1 };
           }
-          
-          if (cur) {
-             if (rowStr.includes('cost price') && (rowStr.includes('sale price') || rowStr.includes('c/bal') || rowStr.includes('bal'))) {
-                cur.hIdx = r;
-                const headers = rows[r].map(h => String(h).trim().toLowerCase());
-                cur.cIdx = headers.findIndex(h => h.includes('cost price'));
-                cur.pIdx = headers.findIndex(h => h.includes('sale price'));
-                cur.bIdx = headers.findIndex(h => h === 'c/bal' || h === 'bal' || h.includes('bal'));
-                lg(`Found data headers at row ${r+1}. C/Bal is at column index ${cur.bIdx}`);
-             }
-             else if (cur.hIdx !== -1 && r > cur.hIdx) {
-                
-                if (col1 && col1 !== '-' && col1.toLowerCase() !== 'total' && col1.toLowerCase() !== 'item name') {
-                   if (cur.name && cur.name !== col1) {
-                       lg(`Found NEW item name '${col1}' at row ${r+1}. Saving previous item.`);
-                       await saveItem(cur);
-                       cur = { code: '', name: col1, cost: 0, price: 0, qty: 0, date: col0 !== '-' ? col0 : '', hIdx: cur.hIdx, cIdx: cur.cIdx, pIdx: cur.pIdx, bIdx: cur.bIdx };
-                   } else if (!cur.name) {
-                       cur.name = col1;
-                       if (col0 && col0 !== '-') cur.date = col0;
-                       lg(`Identified item name: ${col1}`);
-                   }
-                }
 
-                if (cur.cIdx !== -1 && rows[r][cur.cIdx]) {
-                   const cval = Number(String(rows[r][cur.cIdx]).replace(/,/g, ''));
-                   if (!isNaN(cval) && cval > 0) cur.cost = cval;
+          if (cur) {
+            if (rowStr.includes('cost price') && (rowStr.includes('sale price') || rowStr.includes('c/bal') || rowStr.includes('bal'))) {
+              cur.hIdx = r;
+              const headers = rows[r].map(h => String(h).trim().toLowerCase());
+              cur.cIdx = headers.findIndex(h => h.includes('cost price'));
+              cur.pIdx = headers.findIndex(h => h.includes('sale price'));
+              cur.bIdx = headers.findIndex(h => h === 'c/bal' || h === 'bal' || h.includes('bal'));
+              lg(`Found data headers at row ${r + 1}. C/Bal is at column index ${cur.bIdx}`);
+            }
+            else if (cur.hIdx !== -1 && r > cur.hIdx) {
+
+              if (col1 && col1 !== '-' && col1.toLowerCase() !== 'total' && col1.toLowerCase() !== 'item name') {
+                if (cur.name && cur.name !== col1) {
+                  lg(`Found NEW item name '${col1}' at row ${r + 1}. Saving previous item.`);
+                  await saveItem(cur);
+                  cur = { code: '', name: col1, cost: 0, price: 0, qty: 0, date: col0 !== '-' ? col0 : '', hIdx: cur.hIdx, cIdx: cur.cIdx, pIdx: cur.pIdx, bIdx: cur.bIdx };
+                } else if (!cur.name) {
+                  cur.name = col1;
+                  if (col0 && col0 !== '-') cur.date = col0;
+                  lg(`Identified item name: ${col1}`);
                 }
-                if (cur.pIdx !== -1 && rows[r][cur.pIdx]) {
-                   const pval = Number(String(rows[r][cur.pIdx]).replace(/,/g, ''));
-                   if (!isNaN(pval) && pval > 0) cur.price = pval;
-                }
-                if (cur.bIdx !== -1 && rows[r][cur.bIdx] !== '') {
-                   const bval = Number(String(rows[r][cur.bIdx]).replace(/,/g, ''));
-                   if (!isNaN(bval)) cur.qty = bval;
-                }
-             }
+              }
+
+              if (cur.cIdx !== -1 && rows[r][cur.cIdx]) {
+                const cval = Number(String(rows[r][cur.cIdx]).replace(/,/g, ''));
+                if (!isNaN(cval) && cval > 0) cur.cost = cval;
+              }
+              if (cur.pIdx !== -1 && rows[r][cur.pIdx]) {
+                const pval = Number(String(rows[r][cur.pIdx]).replace(/,/g, ''));
+                if (!isNaN(pval) && pval > 0) cur.price = pval;
+              }
+              if (cur.bIdx !== -1 && rows[r][cur.bIdx] !== '') {
+                const bval = Number(String(rows[r][cur.bIdx]).replace(/,/g, ''));
+                if (!isNaN(bval)) cur.qty = bval;
+              }
+            }
           }
         }
-        
+
         if (cur && (cur.name || cur.code)) await saveItem(cur);
       }
-      
+
       lg(`\nDONE! Imported: ${count}. Errors: ${errCount}.`);
       if (errCount > 0) {
         toast(`⚠️ Imported ${count} items. ${errCount} items failed (check log).`, 'w');
       } else {
         toast(`✅ Successfully imported ${count} items!`, 's');
       }
-      if(txt) txt.textContent = `Completed! ${count} imported, ${errCount} errors.`;
-      if(bar) bar.style.width = '100%';
-      
+      if (txt) txt.textContent = `Completed! ${count} imported, ${errCount} errors.`;
+      if (bar) bar.style.width = '100%';
+
       lg('Closing dialog in 3 seconds...');
       await new Promise(r => setTimeout(r, 3500));
       refreshInv();
-    } catch(err) {
-      if(typeof lg !== 'undefined') lg(`CRITICAL FATAL ERROR: ${err.message}`, true);
+    } catch (err) {
+      if (typeof lg !== 'undefined') lg(`CRITICAL FATAL ERROR: ${err.message}`, true);
       toast('Failed to import: ' + err.message, 'e');
       await new Promise(r => setTimeout(r, 4000));
     } finally {
-      if(over) over.style.display = 'none';
+      if (over) over.style.display = 'none';
       input.value = '';
     }
   };
@@ -675,7 +680,7 @@ function openManageCatM() {
       </div>
     </div>
   `).join('');
-  
+
   const pOpts = cats.filter(c => !c.name.includes(' / ')).map(c => `<option value="${c.name}">${esc(c.name)}</option>`).join('');
 
   openM(`<h2>⚙️ Manage Categories</h2>
@@ -694,18 +699,18 @@ function openManageCatM() {
 async function addNewCat() {
   const p = $('nc_p').value;
   const n = $('nc_n').value.trim();
-  if(!n) return;
+  if (!n) return;
   const finalName = p ? `${p} / ${n}` : n;
   const { error } = await sb.from('categories').insert({ name: finalName });
   if (error) { toast(error.message, 'e'); return; }
-  addLog('ADD_CATEGORY', finalName); toast('Category added'); 
-  await refreshInv(); 
+  addLog('ADD_CATEGORY', finalName); toast('Category added');
+  await refreshInv();
   openManageCatM();
 }
 
 async function saveCat(id) {
   const n = $('cat_nm_' + id).value.trim();
-  if(!n) return;
+  if (!n) return;
   const { error } = await sb.from('categories').update({ name: n }).eq('id', id);
   if (error) { toast(error.message, 'e'); return; }
   toast('Saved');
@@ -714,7 +719,7 @@ async function saveCat(id) {
 }
 
 async function delCat(id) {
-  if(!confirm('Delete this category? Items in this category will become uncategorized.')) return;
+  if (!confirm('Delete this category? Items in this category will become uncategorized.')) return;
   const { error } = await sb.from('categories').delete().eq('id', id);
   if (error) { toast(error.message, 'e'); return; }
   toast('Deleted');
@@ -796,7 +801,7 @@ function addToCart(id) {
   const basePrice = item.sale_price;
   const discPct = item.discount_pct || 0;
   const finalPrice = basePrice - (basePrice * (discPct / 100));
-  
+
   if (ex) { if (ex.qty >= Number(item.stock_qty)) { toast(`Max: ${item.stock_qty}`, 'w'); return; } ex.qty++; ex.total = ex.qty * ex.price; }
   else _cart.push({ id, name: item.name, sn: item.serial_number || '', price: finalPrice, origPrice: basePrice, discPct, qty: 1, total: finalPrice, max: Number(item.stock_qty), unit: item.unit || 'pcs' });
   renderCart(); toast(item.name + (discPct > 0 ? ` (${discPct}% off)` : '') + ' added');
@@ -811,12 +816,12 @@ function updTotal() {
   const dt = $('posdtype')?.value || 'rs';
   const disc = dt === 'pct' ? (sub * (dv / 100)) : dv;
   const total = Math.max(0, sub - disc);
-  
+
   const subEl = $('possub'), dEl = $('posdlbl'), totEl = $('postot');
   if (subEl) subEl.textContent = fmtM(sub);
   if (dEl) dEl.textContent = (dt === 'pct' && dv > 0 ? `(${dv}%) ` : '') + fmtM(disc);
   if (totEl) totEl.textContent = fmtM(total);
-  
+
   const ctv = $('ctv'); if (ctv) ctv.textContent = fmtM(total);
   return { sub, disc, total };
 }
@@ -1049,7 +1054,7 @@ async function loadAcctSum() {
     sb.from('items').select('cost_price,sale_price,stock_qty').eq('archived', false)
   ]);
   const sales = sR.data || [], liabs = lR.data || [], items = iR.data || [];
-  
+
   const totRev = sales.reduce((a, s) => a + Number(s.total), 0);
   const totDisc = sales.reduce((a, s) => a + Number(s.discount || 0), 0);
   const paidRev = sales.filter(s => s.paid).reduce((a, s) => a + Number(s.total), 0);
@@ -1154,19 +1159,19 @@ async function runRep() {
   if (_repType === 'sales') {
     let q = sb.from('sales').select('*').order('created_at', { ascending: false });
     const from = $('rff')?.value, to = $('rft')?.value, pm = $('rfpm')?.value, st = $('rfst')?.value;
-    if (from) q = q.gte('created_at', from); 
-    if (to) q = q.lte('created_at', to + 'T23:59:59'); 
+    if (from) q = q.gte('created_at', from);
+    if (to) q = q.lte('created_at', to + 'T23:59:59');
     if (pm) q = q.eq('payment_method', pm);
     if (st === 'paid') q = q.eq('paid', true);
     if (st === 'pend') q = q.eq('paid', false);
     const { data: sales } = await q; const s = sales || []; _repData = s;
-    
+
     // Fetch all sale items for these sales to calculate profit
     const sIds = s.map(x => x.id);
     const { data: si } = sIds.length ? await sb.from('sale_items').select('sale_id,quantity,total,item_id') : { data: [] };
     const { data: items } = await sb.from('items').select('id,cost_price');
     const costMap = {}; (items || []).forEach(i => costMap[i.id] = i.cost_price);
-    
+
     const profitMap = {};
     (si || []).forEach(item => {
       if (!profitMap[item.sale_id]) profitMap[item.sale_id] = 0;
@@ -1203,8 +1208,8 @@ async function runRep() {
     let sQ = sb.from('sales').select('total,paid,discount,payment_method');
     let lQ = sb.from('liabilities').select('amount,remarks,created_at');
     const from = $('rff')?.value, to = $('rft')?.value;
-    if(from){ sQ=sQ.gte('created_at',from); lQ=lQ.gte('created_at',from); }
-    if(to){ sQ=sQ.lte('created_at',to+'T23:59:59'); lQ=lQ.lte('created_at',to+'T23:59:59'); }
+    if (from) { sQ = sQ.gte('created_at', from); lQ = lQ.gte('created_at', from); }
+    if (to) { sQ = sQ.lte('created_at', to + 'T23:59:59'); lQ = lQ.lte('created_at', to + 'T23:59:59'); }
     const [sR, lR] = await Promise.all([sQ, lQ]);
     const sales = sR.data || [], liabs = lR.data || []; _repData = sales;
     const byM = {}; sales.forEach(s => { const m = s.payment_method || 'Cash'; if (!byM[m]) byM[m] = { c: 0, t: 0 }; byM[m].c++; byM[m].t += Number(s.total); });
@@ -1465,9 +1470,9 @@ async function changeMyPw() {
   if (n !== c) { msg.className = 'al ale'; msg.textContent = 'Passwords do not match'; msg.style.display = 'block'; return; }
   const { error } = await sb.auth.updateUser({ password: n });
   if (error) { msg.className = 'al ale'; msg.textContent = error.message; msg.style.display = 'block'; return; }
-  addLog('CHANGE_PASSWORD', 'Password changed'); 
-  msg.className = 'al als'; msg.textContent = '✅ Password updated!'; msg.style.display = 'block'; 
-  $('pwn').value = ''; $('pwc').value = ''; 
+  addLog('CHANGE_PASSWORD', 'Password changed');
+  msg.className = 'al als'; msg.textContent = '✅ Password updated!'; msg.style.display = 'block';
+  $('pwn').value = ''; $('pwc').value = '';
   toast('Password updated successfully', 's');
   setTimeout(() => msg.style.display = 'none', 2500);
 }
@@ -1502,7 +1507,7 @@ async function boot() {
     if (error && error.code === '42501') {
       $('LOAD').style.display = 'none'; setupAuth(); return;
     }
-    
+
     // Default to Login screen
     $('LOAD').style.display = 'none';
     $('LOGIN').style.display = 'flex';
