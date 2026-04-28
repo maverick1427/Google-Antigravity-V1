@@ -153,6 +153,13 @@ async function doLogin() {
   }
 }
 
+async function doLogout() {
+  if (!confirm('Logout?')) return;
+  await addLog('LOGOUT', `${CU?.username} logged out`);
+  await sb.auth.signOut();
+  location.reload();
+}
+
 async function logout() { await sb.auth.signOut(); location.reload(); }
 
 /* PakMac Reveal Observer */
@@ -167,11 +174,14 @@ const revealObs = new IntersectionObserver((ents) => {
 
 function initReveals() {
   const isV2 = document.body.getAttribute('data-version') === 'v2';
-  document.querySelectorAll('.card').forEach(c => {
+  document.querySelectorAll('.card, .stat').forEach(c => {
     if (!isV2) {
       c.classList.add('reveal');
     } else {
       revealObs.observe(c);
+      // Fallback: If it's already in view but hasn't revealed
+      const rect = c.getBoundingClientRect();
+      if(rect.top < window.innerHeight) c.classList.add('reveal');
     }
   });
 }
@@ -559,6 +569,17 @@ async function importExcel(input) {
     }
   };
   reader.readAsArrayBuffer(f);
+}
+
+async function refreshInv() {
+  const [cR, iR] = await Promise.all([
+    sb.from('categories').select('*').order('name'),
+    sb.from('items').select('*,categories(name)').order('name')
+  ]);
+  _cats = cR.data || []; _items = iR.data || [];
+  const sel = $('icat');
+  if (sel) { const v = sel.value; sel.innerHTML = '<option value="">All Categories</option>' + _cats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join(''); sel.value = v; }
+  renderInv();
 }
 
 function renderInv() {
