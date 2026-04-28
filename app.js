@@ -64,6 +64,14 @@ async function addLog(action, detail) {
 }
 
 // ════════════════════════════════════ FIRST-RUN / CONFIG
+function showSignUp() {
+  ['LOGIN', 'CFG-SCREEN', 'APP'].forEach(id => { const el = $(id); if (el) { el.style.display = 'none'; } });
+  $('ADMIN-SCREEN').style.display = 'flex';
+}
+function showLogin() {
+  ['ADMIN-SCREEN', 'CFG-SCREEN', 'APP'].forEach(id => { const el = $(id); if (el) { el.style.display = 'none'; } });
+  $('LOGIN').style.display = 'flex';
+}
 function showCfg() {
   const c = getCfg();
   $('cfg-url').value = c.url || '';
@@ -1474,11 +1482,9 @@ async function boot() {
       $('LOAD').style.display = 'none'; setupAuth(); return;
     }
     
-    if (!data || data.length === 0) {
-      $('LOAD').style.display = 'none';
-      $('ADMIN-SCREEN').style.display = 'flex';
-      setupAuth(); return;
-    }
+    // Default to Login screen
+    $('LOAD').style.display = 'none';
+    $('LOGIN').style.display = 'flex';
     setupAuth();
   } catch (e) {
     $('LOAD').style.display = 'none';

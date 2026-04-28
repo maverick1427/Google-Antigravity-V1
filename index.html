@@ -67,7 +67,7 @@
     <div class="fg"><label>Confirm Password *</label><input id="adm-pw2" type="password" placeholder="Repeat password"></div>
     <button class="btn bp bfl" id="adm-btn" onclick="createFirstAdmin()">✅ Create Administrator Account</button>
     <div style="text-align:center;margin-top:16px">
-      <button class="link-btn" onclick="document.getElementById('ADMIN-SCREEN').style.display='none'; document.getElementById('LOGIN').style.display='flex';">I already have an account</button>
+      <button class="link-btn" onclick="showLogin()">I already have an account</button>
     </div>
   </div>
 </div>
@@ -82,7 +82,8 @@
     <div class="login-title">PAFWA APF</div>
     <div class="login-sub" style="font-weight:600; color:#0f3b75;">Pakistan Air Force Women Association</div>
     <div class="login-sub" style="margin-bottom:4px">PAC Kamra</div>
-    <div class="card-center" style="margin-bottom:20px"><span class="card-badge">INVENTORY & MANAGEMENT SYSTEM</span></div>
+    <div class="card-center" style="margin-bottom:8px"><span class="card-badge">INVENTORY, ACCOUNTING & SALES MANAGEMENT SYSTEM</span></div>
+    <div style="text-align:center;font-size:11px;color:#64748b;margin-bottom:20px; font-weight:600;">v3.2 Designed By : <strong style="color:var(--nv)">FL Abbas Khan</strong></div>
     <div id="lclock" class="lclock"></div>
     <div id="lerr" class="lerr"></div>
     <div class="fg"><label>Username</label><input id="lu" placeholder="Enter username" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()"></div>
@@ -92,8 +93,10 @@
       <span class="pw-eye" onclick="togglePw('lp',this)">👁</span>
     </div>
     <button class="btn bp bfl" id="lbtn" onclick="doLogin()">🔐 Sign In</button>
-    <div style="text-align:center;font-size:12px;color:#64748b;margin-top:20px; font-weight:600;">v3.2 Designed By : <strong style="color:var(--nv)">FL Abbas Khan</strong></div>
-    <div style="text-align:center;margin-top:12px; display:flex; justify-content:center; gap:15px;">
+    <div style="text-align:center;margin-top:16px;">
+      <button class="link-btn" style="color:var(--nv); font-weight:bold; font-size:13px;" onclick="showSignUp()">🆕 Create Admin Account (Sign Up)</button>
+    </div>
+    <div style="text-align:center;margin-top:20px; display:flex; justify-content:center; gap:15px;">
       <button class="link-btn" onclick="showCfg()">⚙️ Change Config</button>
       <button class="link-btn" style="color:var(--rd)" onclick="if(confirm('Reset all settings?')) { localStorage.clear(); location.reload(); }">🗑️ Reset App</button>
     </div>
