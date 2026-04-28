@@ -180,6 +180,7 @@ function setupAuth() {
         else document.querySelectorAll('.adm').forEach(e => e.style.display = '');
         ['LOAD', 'LOGIN', 'CFG-SCREEN', 'ADMIN-SCREEN'].forEach(id => { const el = $(id); if (el) { el.style.display = 'none'; el.classList && el.classList.remove('on'); } });
         $('APP').classList.add('on');
+        await refreshInv(); // This was the missing link to show your data
         goTo('dash');
         return;
       }
