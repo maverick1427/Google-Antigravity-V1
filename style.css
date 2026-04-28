@@ -23,7 +23,42 @@ body{
   overflow-x:hidden;
 }
 
-/* Permanent Backgrounds with Transparency Overlay */
+/* ── V2 MODERN DESIGN SYSTEM ── */
+[data-version="v2"] {
+  --nv: #6366f1; --bl: #818cf8; --bg: #f8fafc; --tx: #1e293b; --mt: #94a3b8; --br: rgba(255,255,255,0.5);
+  --glass: rgba(255, 255, 255, 0.7); --glass-br: rgba(255, 255, 255, 0.4);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+[data-version="v2"][data-theme="dark"] {
+  --nv: #818cf8; --bl: #a5b4fc; --bg: #0f172a; --tx: #f8fafc; --mt: #94a3b8; --br: rgba(255,255,255,0.1);
+  --glass: rgba(15, 23, 42, 0.7); --glass-br: rgba(255, 255, 255, 0.1);
+}
+
+[data-version="v2"] body { background: var(--bg); }
+[data-version="v2"] .sidebar { 
+  background: var(--glass); backdrop-filter: blur(12px); border-right: 1px solid var(--glass-br);
+  margin: 15px; height: calc(100vh - 30px); border-radius: 20px; box-shadow: var(--shadow-lg);
+}
+[data-version="v2"] .card { 
+  background: var(--glass); backdrop-filter: blur(10px); border: 1px solid var(--glass-br);
+  border-radius: 16px; box-shadow: var(--shadow); transition: transform 0.3s ease;
+}
+[data-version="v2"] .card:hover { transform: translateY(-5px); }
+[data-version="v2"] .top-bar { 
+  background: var(--glass); backdrop-filter: blur(10px); border-bottom: 1px solid var(--glass-br);
+  margin: 15px 15px 0 0; border-radius: 15px; box-shadow: var(--shadow);
+}
+
+/* Mobile Bottom Nav for V2 */
+#MOBILE-NAV { display: none; position: fixed; bottom: 0; left: 0; width: 100%; height: 70px; background: var(--glass); backdrop-filter: blur(15px); border-top: 1px solid var(--glass-br); z-index: 1000; justify-content: space-around; align-items: center; padding: 0 10px; }
+[data-version="v2"] #MOBILE-NAV { display: flex; }
+@media (min-width: 901px) { #MOBILE-NAV { display: none !important; } }
+@media (max-width: 900px) { 
+  [data-version="v2"] .sidebar { display: none; }
+  [data-version="v2"] .main-content { margin-left: 0; padding-bottom: 90px; }
+  [data-version="v2"] .top-bar { margin: 10px; }
+}
+
 #APP-BG-WRAPPER {
   position: fixed;
   inset: 0;

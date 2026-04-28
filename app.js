@@ -1497,6 +1497,12 @@ async function loadCfg() {
           <div class="fg"><label>Next Receipt No.</label><input id="srno" type="number" min="1" value="${cfg.next_receipt_no || 1}"></div>
           <div class="fg"><label>Low Stock Threshold</label><input id="slow" type="number" min="1" value="${cfg.low_stock_thresh || 5}"></div>
         </div>
+        <div class="fg"><label>System Version (UI Design)</label>
+          <select id="svers">
+            <option value="v1"${(cfg.ui_version||'v1')==='v1'?' selected':''}>Classic (V1)</option>
+            <option value="v2"${cfg.ui_version==='v2'?' selected':''}>Modern Glassmorphism (V2)</option>
+          </select>
+        </div>
         <button class="btn bp bfl" onclick="saveSettings()">💾 Save Settings</button>
       </div>
       <div class="card">
@@ -1553,6 +1559,7 @@ async function saveSettings() {
     ['receipt_footer', $('sfoot').value.trim()],
     ['next_receipt_no', $('srno').value],
     ['low_stock_thresh', $('slow').value],
+    ['ui_version', $('svers').value],
     ['op_login', $('sop_l').value],
     ['op_app', $('sop_a').value]
   ];
@@ -1562,6 +1569,7 @@ async function saveSettings() {
 async function applyStyles() {
   const { data: sets } = await sb.from('settings').select('*');
   const cfg = {}; (sets || []).forEach(r => cfg[r.key] = r.value);
+  document.body.setAttribute('data-version', cfg.ui_version || 'v1');
   const isLogin = $('LOGIN').style.display === 'flex' || $('ADMIN-SCREEN').style.display === 'flex';
   const bg = isLogin ? (cfg.bg_login || 'login_bg.jpg') : (cfg.bg_app || 'app_bg.jpg');
   const op = isLogin ? (cfg.op_login || 0.6) : (cfg.op_app || 0.4);
