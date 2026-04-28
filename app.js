@@ -145,6 +145,8 @@ async function doLogout() {
   if (!confirm('Logout?')) return;
   await addLog('LOGOUT', `${CU?.username} logged out`);
   await sb.auth.signOut();
+  location.reload(); // Force reload to clear all sensitive state and return to login
+}
 }
 
 // ════════════════════════════════════ AUTH LISTENER
@@ -874,10 +876,10 @@ async function completeSale() {
       <button class="btn bgd bfl" onclick='printRcpt(${JSON.stringify(saleForPrint)})'>🖨️ Print Receipt</button>
     </div>`;
     }
+    toast(`Receipt No.${rno} generated!`, 's');
     _cart = []; renderCart(); $('posc').value = '';
     const { data: fresh } = await sb.from('items').select('*,categories(name)').eq('archived', false).order('name');
     _posItems = fresh || []; filterPOS($('posq')?.value || '');
-    toast(`Receipt No.${rno} generated!`);
   } catch (e) { toast(e.message, 'e'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = '✅ Complete Sale'; } }
 }
@@ -1004,10 +1006,25 @@ async function renderRcpt() {
     <td><div style="display:flex;gap:6px">
       <button class="btn bs bsm" onclick="printRcptById('${x.id}')">🖨️ Print</button>
       ${!x.paid ? `<button class="btn bg_ bsm" onclick="markPaid('${x.id}')">✅ Mark Paid</button>` : ''}
+      ${CU?.role === 'admin' ? `<button class="btn bd bsm" onclick="delRcpt('${x.id}')">🗑️ Delete</button>` : ''}
     </div></td>
   </tr>`).join('')}</tbody></table></div></div>` : '<div style="text-align:center;padding:50px;color:var(--mt)"><div style="font-size:42px;margin-bottom:10px">🧾</div><p>No receipts found</p></div>'}`;
 }
 async function markPaid(id) { await sb.from('sales').update({ paid: true, paid_at: new Date().toISOString() }).eq('id', id); addLog('MARK_PAID', `id:${id}`); toast('Marked paid'); renderRcpt(); }
+async function delRcpt(id) {
+  if (!confirm('Permanently delete this receipt? This will recover the stock quantities.')) return;
+  try {
+    const { data: si } = await sb.from('sale_items').select('*').eq('sale_id', id);
+    for (const item of (si || [])) {
+      const { data: cur } = await sb.from('items').select('stock_qty').eq('id', item.item_id).single();
+      if (cur) await sb.from('items').update({ stock_qty: Number(cur.stock_qty) + Number(item.quantity) }).eq('id', item.item_id);
+    }
+    await sb.from('sale_items').delete().eq('sale_id', id);
+    await sb.from('sales').delete().eq('id', id);
+    addLog('DEL_RCPT', `id:${id}`); toast('Receipt deleted & stock recovered');
+    renderRcpt(); if (typeof renderInv === 'function') renderInv();
+  } catch (e) { toast(e.message, 'e'); }
+}
 
 // ════════════════════════════════════ ACCOUNTING
 async function loadAcct() {
@@ -1448,7 +1465,11 @@ async function changeMyPw() {
   if (n !== c) { msg.className = 'al ale'; msg.textContent = 'Passwords do not match'; msg.style.display = 'block'; return; }
   const { error } = await sb.auth.updateUser({ password: n });
   if (error) { msg.className = 'al ale'; msg.textContent = error.message; msg.style.display = 'block'; return; }
-  addLog('CHANGE_PASSWORD', 'Password changed'); msg.className = 'al als'; msg.textContent = '✅ Password updated!'; msg.style.display = 'block'; $('pwn').value = ''; $('pwc').value = ''; setTimeout(() => msg.style.display = 'none', 2500);
+  addLog('CHANGE_PASSWORD', 'Password changed'); 
+  msg.className = 'al als'; msg.textContent = '✅ Password updated!'; msg.style.display = 'block'; 
+  $('pwn').value = ''; $('pwc').value = ''; 
+  toast('Password updated successfully', 's');
+  setTimeout(() => msg.style.display = 'none', 2500);
 }
 function updateSbCfg() { localStorage.setItem(LS_URL, $('scfgu').value.trim()); localStorage.setItem(LS_KEY, $('scfgk').value.trim()); toast('Config saved — reloading…', 'i'); setTimeout(() => location.reload(), 1000); }
 
