@@ -57,17 +57,19 @@ body{
   position: fixed;
   inset: 0;
   z-index: -2;
-  background-image: url('app_bg.jpg'); /* 3rd pic */
+  background-image: url('app_bg.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  display: block !important;
 }
 #APP-BG-OVERLAY {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: rgba(248, 250, 252, 0.4); /* Much more transparent so the jet shows up clearly */
+  background: rgba(var(--bg-rgb, 248, 250, 252), var(--bg-op, 0.4));
   backdrop-filter: blur(2px);
+  display: block !important;
 }
 
 /* ── LOADING ── */
@@ -80,29 +82,6 @@ body{
 .dynamic-logo-container img {
   width: 100%; height: 100%; object-fit: contain;
   filter: drop-shadow(0 8px 16px rgba(0,0,0,0.3));
-  async function logout() { await sb.auth.signOut(); location.reload(); }
-
-/* PakMac Reveal Observer */
-const revealObs = new IntersectionObserver((ents) => {
-  ents.forEach(e => { if(e.isIntersecting) { e.target.classList.add('reveal'); revealObs.unobserve(e.target); } });
-}, { threshold: 0.1 });
-
-function initReveals() {
-  if (document.body.getAttribute('data-version') !== 'v2') {
-    document.querySelectorAll('.card').forEach(c => c.classList.add('reveal')); // Instant reveal for V1
-    return;
-  }
-  document.querySelectorAll('.card').forEach(c => revealObs.observe(c));
-}
-
-// Update goTo to trigger reveal
-const oldGoTo = window.goTo;
-window.goTo = function(p) {
-  if(typeof oldGoTo === 'function') oldGoTo(p);
-  setTimeout(initReveals, 100);
-};
-
-initSB();
 }
 @keyframes floatLogo {
   0% { transform: translateY(0px) scale(1); }
@@ -245,12 +224,13 @@ nav{flex:1;padding:8px 0;overflow-y:auto}
   flex-direction: column;
   min-width: 0;
   height: 100vh;
-  background: var(--bg);
+  background: transparent; /* Show jet */
 }
 main {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
+  background: transparent;
 }
 .pg{display:none;animation:fadeIn 0.3s ease-out}
 @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
@@ -434,4 +414,9 @@ textarea{resize:vertical;min-height:60px}
   .mf{margin-top:12px; padding-top:8px;}
   .fg{margin-bottom:10px;}
   label{margin-bottom:2px; font-size:10px;}
+}
+
+/* -- NATIVE SOFTWARE DESKTOP FIXES -- */
+@media (min-width: 901px) {
+  .bottom-nav { display: none !important; }
 }

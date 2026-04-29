@@ -110,7 +110,13 @@ async function performSync() {
       sby.textContent = '🟢 Synced';
       sby.style.color = 'var(--gr)';
     }
-    await refreshInv(); // Update UI with new data
+    await refreshInv(); 
+    // Auto-refresh the current page to show new data
+    if (window._curP === 'dash') await loadDash();
+    else if (window._curP === 'rcpt') await renderRcpt();
+    else if (window._curP === 'acct') await loadAcctSum();
+    else if (window._curP === 'rep') await loadRep();
+
     updatePendingCount();
   } catch (e) {
     if (sby) sby.textContent = '🔴 Sync Error';
@@ -302,6 +308,7 @@ document.querySelectorAll('.ni.adm').forEach((b, i) => { const p = ['logs', 'use
 const LOADERS = { dash: loadDash, inv: loadInv, pos: loadPOS, rcpt: loadRcpt, acct: loadAcct, rep: loadRep, logs: loadLogs, users: loadUsers, bkp: loadBkp, cfg: loadCfg };
 function goTo(p) {
   if (adminPages.includes(p) && CU?.role !== 'admin') { toast('Admin only', 'e'); return; }
+  window._curP = p;
   document.querySelectorAll('.pg').forEach(e => e.classList.remove('on'));
   const pg = $('page-' + p);
   if (pg) pg.classList.add('on');
