@@ -7,7 +7,9 @@
 <title>PAFWA APF — Management System</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="db.js"></script>
 <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
@@ -146,9 +148,10 @@
       </div>
       <div class="sb-meta">
         <div class="sb-tm" id="sbtm"></div>
-        <div class="sb-sy" id="sbsy">⏳ Connecting…</div>
+        <div id="sync-status" style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:4px;">Pending: <span id="pending-count" style="font-weight:700">0</span></div>
       </div>
-      <button class="btn-lo" onclick="doLogout()">⏻ Logout</button>
+      <button class="btn bp bsm" style="width:100%; margin-top:10px; font-weight:700; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2)" onclick="syncNow()" id="sync-btn">🔄 Sync with Cloud</button>
+      <button class="btn-lo" style="margin-top:8px" onclick="doLogout()">⏻ Logout</button>
     </div>
   </aside>
 
@@ -162,20 +165,21 @@
 
   <!-- Main content -->
   <div class="main-wrap">
-    <!-- Topbar (mobile) -->
-    <header class="topbar">
-      <button class="hamburger" onclick="openSidebar()" id="ham-btn" aria-label="Open menu">
-        <span></span><span></span><span></span>
-      </button>
-      <div class="topbar-brand">
-        <div class="dynamic-logo-container" style="width:28px;height:28px;flex-shrink:0;">
-          <img src="logo.png" alt="PAFWA Logo" onerror="this.src='logo_160.png'">
+    <!-- Desktop Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <button class="hamburger" onclick="toggleSB()" id="ham-btn"><span></span><span></span><span></span></button>
+        <div class="app-title-area">
+          <span class="app-title">PAFWA Inventory & POS</span>
+          <span class="app-subtitle">Professional Management Suite</span>
         </div>
-        <span>PAFWA APF</span>
       </div>
-      <div class="topbar-right">
-        <span id="top-time" style="font-size:11px;color:#64748b;font-weight:700"></span>
-        <button class="top-lo" onclick="doLogout()">⏻ <span style="display:none">Logout</span></button>
+      <div class="header-right">
+        <div class="header-time" id="top-time"></div>
+        <div class="header-status">
+          <span class="status-indicator"></span>
+          <span id="sbsy">System Online</span>
+        </div>
       </div>
     </header>
 
@@ -190,6 +194,19 @@
       <div id="page-users"class="pg"></div>
       <div id="page-bkp"  class="pg"></div>
       <div id="page-cfg"  class="pg"></div>
+    </main>
+
+    <!-- Native App Status Bar -->
+    <footer class="app-status-bar">
+      <div class="status-left">
+        <span class="status-item">🟢 Connected to Supabase</span>
+        <span class="status-item">📁 Database: Local Portable</span>
+      </div>
+      <div class="status-right">
+        <span class="status-item">👤 Session: <strong id="status-user">Admin</strong></span>
+        <span class="status-item">v1.0.1</span>
+      </div>
+    </footer>
 <!-- Mobile Bottom Navigation -->
     <nav class="bottom-nav" id="BOTTOM-NAV">
       <button class="ni on" data-p="dash"><span class="ic">📊</span><span class="lbl">Dashboard</span></button>

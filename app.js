@@ -46,6 +46,92 @@ function initSB(url, key) {
   catch (e) { return false; }
 }
 
+// ════════════════════════════════════ OFFLINE-FIRST HELPERS
+async function updatePendingCount() {
+  try {
+    let count = 0;
+    const tables = ['items', 'categories', 'sales', 'sale_items', 'liabilities', 'logs'];
+    for (const t of tables) {
+      count += await db[t].where('_sync_status').equals('pending').count();
+    }
+    const el = $('pending-count');
+    if (el) {
+      el.textContent = count;
+      el.style.color = count > 0 ? 'var(--or)' : 'var(--gr)';
+    }
+  } catch (e) { console.warn('Pending count error:', e); }
+}
+
+async function performSync() {
+  if (!sb || !CU) { toast('Please login to sync', 'w'); return; }
+  const sby = $('sbsy'); if (sby) sby.textContent = '🔄 Syncing…';
+  
+  try {
+    const tables = ['categories', 'items', 'sales', 'sale_items', 'liabilities', 'logs'];
+    
+    // 1. PUSH LOCAL CHANGES
+    for (const t of tables) {
+      const pending = await db[t].where('_sync_status').equals('pending').toArray();
+      for (const item of pending) {
+        const { _sync_status, ...toUpload } = item;
+        // Handle inserts/updates (Supabase upsert)
+        const { error } = await sb.from(t).upsert(toUpload);
+        if (!error) {
+          await db[t].update(item.id || item.key, { _sync_status: 'synced' });
+        } else {
+          console.error(`Sync error for ${t}:`, error);
+        }
+      }
+    }
+
+    // 2. PULL REMOTE CHANGES
+    for (const t of ['categories', 'items', 'sales', 'liabilities', 'settings']) {
+      const { data, error } = await sb.from(t).select('*');
+      if (!error && data) {
+        for (const remoteItem of data) {
+          const localItem = await db[t].get(remoteItem.id || remoteItem.key);
+          // Only update if local is not pending OR remote is newer
+          if (!localItem || localItem._sync_status !== 'pending') {
+            await db[t].put({ ...remoteItem, _sync_status: 'synced' });
+          }
+        }
+      }
+    }
+
+    // 3. SPECIAL HANDLING FOR SALE ITEMS
+    const { data: siData, error: siErr } = await sb.from('sale_items').select('*');
+    if (!siErr && siData) {
+      for (const item of siData) {
+        await db.sale_items.put({ ...item, _sync_status: 'synced' });
+      }
+    }
+
+    if (sby) {
+      sby.textContent = '🟢 Synced';
+      sby.style.color = 'var(--gr)';
+    }
+    await refreshInv(); // Update UI with new data
+    updatePendingCount();
+  } catch (e) {
+    if (sby) sby.textContent = '🔴 Sync Error';
+    throw e;
+  }
+}
+
+async function syncNow() {
+  const btn = $('sync-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '🔄 Syncing...'; }
+  try {
+    await performSync();
+    toast('Sync Successful', 's');
+  } catch (e) {
+    toast('Sync Failed: ' + e.message, 'e');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '🔄 Sync with Cloud'; }
+  }
+}
+
+
 // ════════════════════════════════════ UI UTILS
 let toastT;
 function toast(m, t = 's') { const e = $('TOAST'); e.textContent = m; e.className = `t${t} on`; clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('on'), 3500); }
@@ -70,9 +156,20 @@ function closeSidebar() { $('SB').classList.remove('open'); $('SB-OVERLAY').clas
 
 // ════════════════════════════════════ LOGGING
 async function addLog(action, detail) {
-  if (!sb || !CU) return;
-  try { await sb.from('logs').insert({ user_id: CU.id, username: CU.username, role: CU.role, action, detail }); }
-  catch (e) { console.warn('log:', e.message); }
+  try {
+    const log = {
+      id: crypto.randomUUID(),
+      user_id: CU?.id,
+      username: CU?.username,
+      role: CU?.role,
+      action,
+      detail,
+      created_at: new Date().toISOString(),
+      _sync_status: 'pending'
+    };
+    await db.logs.add(log);
+    updatePendingCount();
+  } catch (e) { console.warn('log error:', e.message); }
 }
 
 // ════════════════════════════════════ FIRST-RUN / CONFIG
@@ -218,12 +315,10 @@ function goTo(p) {
 async function loadDash() {
   const el = $('page-dash'); ld(el);
   try {
-    const [iR, sR, lR] = await Promise.all([
-      sb.from('items').select('id,stock_qty,min_stock_threshold,name,serial_number').eq('archived', false),
-      sb.from('sales').select('id,total,paid,receipt_no,customer_name,cashier,payment_method,created_at').order('created_at', { ascending: false }).limit(200),
-      sb.from('liabilities').select('amount')
-    ]);
-    const items = iR.data || [], sales = sR.data || [], liabs = lR.data || [];
+    const items = await db.items.where('archived').equals(0).toArray();
+    const sales = await db.sales.orderBy('created_at').reverse().limit(200).toArray();
+    const liabs = await db.liabilities.toArray();
+    
     const today = new Date().toISOString().slice(0, 10);
     const month = today.slice(0, 7);
     const todS = sales.filter(s => s.created_at?.startsWith(today));
@@ -316,14 +411,22 @@ async function loadInv() {
 }
 
 async function refreshInv() {
-  const [cR, iR] = await Promise.all([
-    sb.from('categories').select('*').order('name'),
-    sb.from('items').select('*,categories(name)').order('name')
-  ]);
-  _cats = cR.data || []; _items = iR.data || [];
+  const cats = await db.categories.toArray();
+  const items = await db.items.toArray();
+  _cats = cats;
+  _items = items.map(i => ({
+    ...i,
+    categories: cats.find(c => c.id === i.category_id)
+  }));
+
   const sel = $('icat');
-  if (sel) { const v = sel.value; sel.innerHTML = '<option value="">All Categories</option>' + _cats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join(''); sel.value = v; }
+  if (sel) {
+    const v = sel.value;
+    sel.innerHTML = '<option value="">All Categories</option>' + _cats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    sel.value = v;
+  }
   renderInv();
+  updatePendingCount();
 }
 
 async function importExcel(input) {
@@ -639,7 +742,8 @@ async function submitItem(id) {
   if (!name) { err.textContent = 'Name required'; err.style.display = 'block'; return; }
   try {
     let imgUrl = id ? (_items.find(i => i.id === id)?.image_url || null) : null, imgPath = null;
-    if (window._imgFile) {
+    // (Image upload logic still requires Supabase, so we keep it as is, but it might fail offline)
+    if (window._imgFile && sb) {
       const ext = window._imgFile.name.split('.').pop();
       const path = `${Date.now()}.${ext}`;
       const { data: upData, error: upErr } = await sb.storage.from('item-images').upload(path, window._imgFile, { upsert: true });
@@ -648,35 +752,29 @@ async function submitItem(id) {
       const { data: { publicUrl } } = sb.storage.from('item-images').getPublicUrl(path);
       imgUrl = publicUrl;
     }
+
     let catId = $('ficat').value;
-    if (!catId) { // Trigger even for edits if category is "None"
-      const firstWord = name.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').trim();
-      if (firstWord) {
-        let existing = _cats.find(c => c.name.split(' / ').pop().trim().toLowerCase() === firstWord.toLowerCase());
-        if (!existing) {
-          const { data: newCat } = await sb.from('categories').insert({ name: firstWord }).select().single();
-          if (newCat) { await refreshInv(); catId = newCat.id; if($('ficat')) $('ficat').value = catId; }
-        } else { 
-          catId = existing.id; if($('ficat')) $('ficat').value = catId;
-        }
-      }
-    }
-    
     let sn = $('fisn').value.trim();
-    if (!sn) { 
-      sn = await suggestSN(catId); 
-      if($('fisn')) $('fisn').value = sn;
-    }
     if (!sn) sn = `PAF-${Date.now().toString(36).toUpperCase()}`;
-    
+
     const payload = {
+      id: id || crypto.randomUUID(),
       name, serial_number: sn, category_id: catId || null, location: $('filoc').value.trim(), date_of_boc: $('fiboc').value || null,
       cost_price: parseFloat($('ficp').value) || 0, sale_price: parseFloat($('fisp').value) || 0, discount_pct: parseFloat($('fidisc').value) || 0,
       stock_qty: parseInt($('fiq').value) || 0, min_stock_threshold: parseInt($('fimq').value) || 5, unit: $('fiunit').value.trim() || 'pcs',
-      description: $('fidesc').value.trim(), image_url: imgUrl, image_path: imgPath, archived: false
+      description: $('fidesc').value.trim(), image_url: imgUrl, image_path: imgPath, archived: false,
+      updated_at: new Date().toISOString(),
+      _sync_status: 'pending'
     };
-    if (id) { const { error } = await sb.from('items').update(payload).eq('id', id); if (error) throw error; addLog('UPDATE_ITEM', `${name}`); }
-    else { const { error } = await sb.from('items').insert({ ...payload, created_at: new Date().toISOString() }); if (error) throw error; addLog('ADD_ITEM', `${name} (${sn})`); }
+
+    if (id) {
+      await db.items.update(id, payload);
+      addLog('UPDATE_ITEM', `${name}`);
+    } else {
+      payload.created_at = new Date().toISOString();
+      await db.items.add(payload);
+      addLog('ADD_ITEM', `${name} (${sn})`);
+    }
     toast(id ? 'Item updated' : 'Item added'); closeM(); await refreshInv();
   } catch (e) { err.textContent = e.message; err.style.display = 'block'; }
 }
@@ -892,26 +990,51 @@ async function completeSale() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Processing…'; }
   try {
     const { sub, disc, total } = updTotal();
-    const { data: rnoData, error: rnoErr } = await sb.rpc('get_next_receipt_no');
-    if (rnoErr) throw rnoErr;
-    const rno = rnoData;
-    const { data: saleData, error: saleErr } = await sb.from('sales').insert({
+    
+    // Get next receipt number locally
+    const lastSale = await db.sales.orderBy('receipt_no').last();
+    const rno = (lastSale ? lastSale.receipt_no : 0) + 1;
+    
+    const saleId = crypto.randomUUID();
+    const saleData = {
+      id: saleId,
       receipt_no: rno, customer_name: cust, cashier, payment_method: pm,
       subtotal: sub, discount: disc, total, paid,
       paid_at: paid ? new Date().toISOString() : null,
-      created_by: CU?.id
-    }).select().single();
-    if (saleErr) throw saleErr;
-    const saleItems = _cart.map(i => ({ sale_id: saleData.id, item_id: i.id, item_name: i.name, item_sn: i.sn, quantity: i.qty, unit_price: i.price, total: i.total, unit: i.unit }));
-    const { error: siErr } = await sb.from('sale_items').insert(saleItems);
-    if (siErr) throw siErr;
+      created_by: CU?.id,
+      created_at: new Date().toISOString(),
+      _sync_status: 'pending'
+    };
+
+    await db.sales.add(saleData);
+
+    const saleItems = _cart.map(i => ({
+      id: crypto.randomUUID(),
+      sale_id: saleId,
+      item_id: i.id,
+      item_name: i.name,
+      item_sn: i.sn,
+      quantity: i.qty,
+      unit_price: i.price,
+      total: i.total,
+      unit: i.unit,
+      _sync_status: 'pending'
+    }));
+
+    await db.sale_items.bulkAdd(saleItems);
+
     for (const ci of _cart) {
-      const cur = _posItems.find(i => i.id === ci.id);
-      const newQty = Math.max(0, Number(cur?.stock_qty || 0) - ci.qty);
-      await sb.from('items').update({ stock_qty: newQty }).eq('id', ci.id);
+      const cur = await db.items.get(ci.id);
+      if (cur) {
+        const newQty = Math.max(0, Number(cur.stock_qty || 0) - ci.qty);
+        await db.items.update(ci.id, { stock_qty: newQty, _sync_status: 'pending' });
+      }
     }
+
     addLog('SALE', `No.${rno} | ${cust} | ${fmtM(total)} | ${pm}`);
-    const ok = $('saleok'); const saleForPrint = { ...saleData, items: saleItems };
+    
+    const ok = $('saleok'); 
+    const saleForPrint = { ...saleData, items: saleItems };
     if (ok) {
       ok.style.display = 'block'; ok.innerHTML = `<div class="al als" style="margin-top:16px;border-width:2px;background:#f0fdf4">
       <div style="font-size:16px;font-weight:800;color:var(--gr);margin-bottom:4px">✅ Sale Complete!</div>
@@ -921,19 +1044,23 @@ async function completeSale() {
     }
     toast(`Receipt No.${rno} generated!`, 's');
     _cart = []; renderCart(); $('posc').value = '';
-    const { data: fresh } = await sb.from('items').select('*,categories(name)').eq('archived', false).order('name');
-    _posItems = fresh || []; filterPOS($('posq')?.value || '');
+    
+    const freshItems = await db.items.where('archived').equals(0).toArray();
+    const cats = await db.categories.toArray();
+    _posItems = freshItems.map(i => ({ ...i, categories: cats.find(c => c.id === i.category_id) }));
+    filterPOS($('posq')?.value || '');
+    updatePendingCount();
   } catch (e) { toast(e.message, 'e'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = '✅ Complete Sale'; } }
 }
 
 // ════════════════════════════════════ RECEIPT PRINT
 async function printRcptById(saleId) {
-  const { data: s } = await sb.from('sales').select('*').eq('id', saleId).single();
-  const { data: items } = await sb.from('sale_items').select('*').eq('sale_id', saleId);
+  const s = await db.sales.get(saleId);
+  const items = await db.sale_items.where('sale_id').equals(saleId).toArray();
   if (!s) return;
-  const { data: cfg } = await sb.from('settings').select('key,value');
-  const c = {}; (cfg || []).forEach(r => c[r.key] = r.value);
+  const cfgData = await db.settings.toArray();
+  const c = {}; cfgData.forEach(r => c[r.key] = r.value);
   printRcpt({ ...s, items });
 }
 function printRcpt(sale) {
@@ -1020,16 +1147,16 @@ async function loadRcpt() {
   await renderRcpt();
 }
 async function renderRcpt() {
-  let q = sb.from('sales').select('*').order('created_at', { ascending: false });
   const from = $('rfrom')?.value, to = $('rto')?.value, pm = $('rpm')?.value, st = $('rst')?.value, sq = $('rq')?.value;
-  if (from) q = q.gte('created_at', from);
-  if (to) q = q.lte('created_at', to + 'T23:59:59');
-  if (pm) q = q.eq('payment_method', pm);
-  if (st === 'paid') q = q.eq('paid', true);
-  if (st === 'pend') q = q.eq('paid', false);
-  const { data: sales } = await q;
-  let s = sales || [];
+  let s = await db.sales.orderBy('created_at').reverse().toArray();
+  
+  if (from) s = s.filter(x => x.created_at >= from);
+  if (to) s = s.filter(x => x.created_at <= to + 'T23:59:59');
+  if (pm) s = s.filter(x => x.payment_method === pm);
+  if (st === 'paid') s = s.filter(x => x.paid);
+  if (st === 'pend') s = s.filter(x => !x.paid);
   if (sq) { const ql = sq.toLowerCase(); s = s.filter(x => String(x.receipt_no).includes(sq) || x.customer_name?.toLowerCase().includes(ql)); }
+  
   const tot = s.reduce((a, x) => a + Number(x.total), 0);
   const el = $('rtbl'); if (!el) return;
   el.innerHTML = `<div class="al ali" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
@@ -1086,12 +1213,9 @@ async function loadAcct() {
 function tabA(t, btn) { document.querySelectorAll('#page-acct .tab').forEach(e => e.classList.remove('on')); document.querySelectorAll('#page-acct .tabp').forEach(e => e.classList.remove('on')); btn.classList.add('on'); $('a' + t).classList.add('on'); if (t === 'led') loadAcctLed(); else if (t === 'liab') loadAcctLiab(); }
 async function loadAcctSum() {
   ld($('asum'));
-  const [sR, lR, iR] = await Promise.all([
-    sb.from('sales').select('total,paid,discount,payment_method,subtotal'),
-    sb.from('liabilities').select('amount'),
-    sb.from('items').select('cost_price,sale_price,stock_qty').eq('archived', false)
-  ]);
-  const sales = sR.data || [], liabs = lR.data || [], items = iR.data || [];
+  const sales = await db.sales.toArray();
+  const liabs = await db.liabilities.toArray();
+  const items = await db.items.where('archived').equals(0).toArray();
 
   const totRev = sales.reduce((a, s) => a + Number(s.total), 0);
   const totDisc = sales.reduce((a, s) => a + Number(s.discount || 0), 0);
@@ -1100,15 +1224,11 @@ async function loadAcctSum() {
   const totLiab = liabs.reduce((a, l) => a + Number(l.amount), 0);
   const totGift = sales.filter(s => s.payment_method === 'Gift').reduce((a, s) => a + Number(s.total), 0);
 
-  // Realized Profit (Estimate from sales - cost)
-  // We'll fetch sale_items for accurate COGS if possible, or estimate
-  const { data: si } = await sb.from('sale_items').select('quantity,unit_price,total,item_id');
-  const { data: itemMap } = await sb.from('items').select('id,cost_price');
-  const costMap = {}; (itemMap || []).forEach(i => costMap[i.id] = i.cost_price);
+  const si = await db.sale_items.toArray();
+  const costMap = {}; items.forEach(i => costMap[i.id] = i.cost_price);
   const totCOGS = (si || []).reduce((a, s) => a + (Number(s.quantity) * Number(costMap[s.item_id] || 0)), 0);
   const profitRealized = totRev - totCOGS;
 
-  // Unrealized Worth & Profit
   const unrealizedWorth = items.reduce((a, i) => a + (Number(i.sale_price) * Number(i.stock_qty)), 0);
   const unrealizedProfit = items.reduce((a, i) => a + ((Number(i.sale_price) - Number(i.cost_price)) * Number(i.stock_qty)), 0);
 
@@ -1300,7 +1420,7 @@ async function loadLogs() {
     </div>
   </div>
   <div id="logtbl">⏳ Loading…</div>`;
-  window._allLogs = (await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(500)).data || [];
+  window._allLogs = await db.logs.orderBy('created_at').reverse().limit(500).toArray();
   renderLogs();
 }
 function renderLogs() {
@@ -1359,7 +1479,7 @@ async function quickAddCat() {
   if (!n) return;
   const { data, error } = await sb.from('categories').insert({ name: n.trim() }).select().single();
   if (error) { toast(error.message, 'e'); return; }
-  await refreshInv(); 
+  await refreshInv();
   const sel = $('ficat');
   if (sel) {
     sel.innerHTML = '<option value="">None</option>' + _cats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
@@ -1372,7 +1492,7 @@ async function suggestSN(providedCatId = null) {
   const catId = providedCatId || $('ficat').value;
   if (!catId) return '';
   const catName = _cats.find(c => c.id === catId)?.name || 'NONE';
-  let code = catName.split(' / ').pop().replace(/\s+/g,'').slice(0, 4).toUpperCase().padEnd(4, 'X');
+  let code = catName.split(' / ').pop().replace(/\s+/g, '').slice(0, 4).toUpperCase().padEnd(4, 'X');
   const year = new Date().getFullYear();
   const { count } = await sb.from('items').select('*', { count: 'exact', head: true }).eq('category_id', catId);
   const index = String((count || 0) + 1).padStart(3, '0');
@@ -1504,8 +1624,8 @@ async function loadCfg() {
         </div>
         <div class="fg"><label>System Version (UI Design)</label>
           <select id="svers">
-            <option value="v1"${(cfg.ui_version||'v1')==='v1'?' selected':''}>Classic (V1)</option>
-            <option value="v2"${cfg.ui_version==='v2'?' selected':''}>Modern Glassmorphism (V2)</option>
+            <option value="v1"${(cfg.ui_version || 'v1') === 'v1' ? ' selected' : ''}>Classic (V1)</option>
+            <option value="v2"${cfg.ui_version === 'v2' ? ' selected' : ''}>Modern Glassmorphism (V2)</option>
           </select>
         </div>
         <button class="btn bp bfl" onclick="saveSettings()">💾 Save Settings</button>
@@ -1572,7 +1692,7 @@ async function saveSettings() {
   addLog('SAVE_SETTINGS', 'Settings updated'); toast('Settings saved'); applyStyles();
 }
 async function applyStyles() {
-  const { data: sets } = await sb.from('settings').select('*');
+  const sets = await db.settings.toArray();
   const cfg = {}; (sets || []).forEach(r => cfg[r.key] = r.value);
   document.body.setAttribute('data-version', cfg.ui_version || 'v1');
   const isLogin = $('LOGIN').style.display === 'flex' || $('ADMIN-SCREEN').style.display === 'flex';
@@ -1628,7 +1748,16 @@ setInterval(async () => {
 }, 30000);
 
 // ════════════════════════════════════ BOOT
+// ════════════════════════════════════ BOOT
 async function boot() {
+  // Detect if running in Electron (Desktop EXE)
+  const isElectron = navigator.userAgent.toLowerCase().includes(' electron/');
+  if (isElectron) {
+    document.body.classList.add('is-electron');
+  } else {
+    document.body.classList.add('is-browser');
+  }
+
   const lm = $('LOAD-MSG'); if (lm) lm.textContent = 'Connecting to Supabase…';
   if (!hasCfg()) { $('LOAD').style.display = 'none'; showCfg(); return; }
   const { url, key } = getCfg();
@@ -1639,11 +1768,21 @@ async function boot() {
       $('LOAD').style.display = 'none'; setupAuth(); return;
     }
 
+    // Check if local DB is empty and trigger sync if logged in
+    const itemCount = await db.items.count();
+    if (itemCount === 0) {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) {
+         if (lm) lm.textContent = 'Performing initial data sync...';
+         await performSync();
+      }
+    }
+
     // Default to Login screen
     $('LOAD').style.display = 'none';
     $('LOGIN').style.display = 'flex';
     setupAuth();
-    if (typeof applyStyles === 'function') applyStyles();
+    if (typeof applyStyles === 'function') await applyStyles();
   } catch (e) {
     $('LOAD').style.display = 'none';
     const err = $('cfg-err');
