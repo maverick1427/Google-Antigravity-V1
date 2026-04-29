@@ -29,6 +29,11 @@ body{
   user-select: none;
 }
 
+/* ── WEB vs EXE ADAPTIVE VISIBILITY ── */
+.is-web .app-header, .is-web .app-status-bar { display: none !important; }
+.is-exe .topbar { display: none !important; }
+.is-web .topbar { display: flex !important; }
+
 /* ── V2 MODERN DESIGN SYSTEM ── */
 [data-version="v2"] {
   --nv: #1b365d; --bl: #2e5a97; --bg: #f8fafc; --tx: #0f172a; --mt: #64748b; 

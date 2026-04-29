@@ -19,6 +19,45 @@ const fmtM = n => 'Rs. ' + Number(n || 0).toLocaleString('en-PK', { minimumFract
 const fmtD = s => { if (!s) return '—'; const d = new Date(s); return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-'); };
 const fmtDT = s => { if (!s) return '—'; const d = new Date(s); return d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }); };
 
+// ════════════════════════════════════ ADAPTIVE DATA LAYER
+const Data = {
+  async getItems() {
+    if (window.isEXE) return (await db.items.toArray()).filter(i => !i.archived);
+    const { data } = await sb.from('items').select('*,categories(name)').eq('archived', false).order('name');
+    return data || [];
+  },
+  async getSales(limit = 100) {
+    if (window.isEXE) return await db.sales.orderBy('created_at').reverse().limit(limit).toArray();
+    const { data } = await sb.from('sales').select('*').order('created_at', { ascending: false }).limit(limit);
+    return data || [];
+  },
+  async getLiabilities() {
+    if (window.isEXE) return await db.liabilities.toArray();
+    const { data } = await sb.from('liabilities').select('*').order('created_at', { ascending: false });
+    return data || [];
+  },
+  async getCategories() {
+    if (window.isEXE) return await db.categories.toArray();
+    const { data } = await sb.from('categories').select('*').order('name');
+    return data || [];
+  },
+  async getSaleItems() {
+    if (window.isEXE) return await db.sale_items.toArray();
+    const { data } = await sb.from('sale_items').select('*');
+    return data || [];
+  },
+  async save(table, item) {
+    if (window.isEXE) {
+      const toSave = { ...item, _sync_status: 'pending' };
+      await db[table].put(toSave);
+      updatePendingCount();
+      return { data: toSave, error: null };
+    } else {
+      return await sb.from(table).upsert(item);
+    }
+  }
+};
+
 function getCfg() {
   let url = HARDCODED_URL || localStorage.getItem(LS_URL) || '';
   const key = HARDCODED_KEY || localStorage.getItem(LS_KEY) || '';
@@ -65,10 +104,10 @@ async function updatePendingCount() {
 async function performSync() {
   if (!sb || !CU) { toast('Please login to sync', 'w'); return; }
   const sby = $('sbsy'); if (sby) sby.textContent = '🔄 Syncing…';
-  
+
   try {
     const tables = ['categories', 'items', 'sales', 'sale_items', 'liabilities', 'logs'];
-    
+
     // 1. PUSH LOCAL CHANGES
     for (const t of tables) {
       const pending = await db[t].where('_sync_status').equals('pending').toArray();
@@ -110,7 +149,7 @@ async function performSync() {
       sby.textContent = '🟢 Synced';
       sby.style.color = 'var(--gr)';
     }
-    await refreshInv(); 
+    await refreshInv();
     // Auto-refresh the current page to show new data
     if (window._curP === 'dash') await loadDash();
     else if (window._curP === 'rcpt') await renderRcpt();
@@ -322,10 +361,10 @@ function goTo(p) {
 async function loadDash() {
   const el = $('page-dash'); ld(el);
   try {
-    const items = await db.items.where('archived').equals(0).toArray();
-    const sales = await db.sales.orderBy('created_at').reverse().limit(200).toArray();
-    const liabs = await db.liabilities.toArray();
-    
+    const items = await Data.getItems();
+    const sales = await Data.getSales(200);
+    const liabs = await Data.getLiabilities();
+
     const today = new Date().toISOString().slice(0, 10);
     const month = today.slice(0, 7);
     const todS = sales.filter(s => s.created_at?.startsWith(today));
@@ -418,8 +457,8 @@ async function loadInv() {
 }
 
 async function refreshInv() {
-  const cats = await db.categories.toArray();
-  const items = await db.items.toArray();
+  const cats = await Data.getCategories();
+  const items = await Data.getItems();
   _cats = cats;
   _items = items.map(i => ({
     ...i,
@@ -653,16 +692,6 @@ async function importExcel(input) {
   reader.readAsArrayBuffer(f);
 }
 
-async function refreshInv() {
-  const [cR, iR] = await Promise.all([
-    sb.from('categories').select('*').order('name'),
-    sb.from('items').select('*,categories(name)').order('name')
-  ]);
-  _cats = cR.data || []; _items = iR.data || [];
-  const sel = $('icat');
-  if (sel) { const v = sel.value; sel.innerHTML = '<option value="">All Categories</option>' + _cats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join(''); sel.value = v; }
-  renderInv();
-}
 
 function renderInv() {
   const q = ($('iq')?.value || '').toLowerCase(), cat = $('icat')?.value, sh = $('ish')?.value || 'active';
@@ -774,15 +803,22 @@ async function submitItem(id) {
       _sync_status: 'pending'
     };
 
-    if (id) {
-      await db.items.update(id, payload);
-      addLog('UPDATE_ITEM', `${name}`);
+    if (window.isEXE) {
+      if (id) {
+        await db.items.update(id, payload);
+        addLog('UPDATE_ITEM', `${name}`);
+      } else {
+        payload.created_at = new Date().toISOString();
+        await db.items.add(payload);
+        addLog('ADD_ITEM', `${name} (${sn})`);
+      }
     } else {
-      payload.created_at = new Date().toISOString();
-      await db.items.add(payload);
-      addLog('ADD_ITEM', `${name} (${sn})`);
+      const { error } = await sb.from('items').upsert(payload);
+      if (error) throw error;
+      addLog(id ? 'UPDATE_ITEM' : 'ADD_ITEM', `${name}`);
     }
     toast(id ? 'Item updated' : 'Item added'); closeM(); await refreshInv();
+    updatePendingCount();
   } catch (e) { err.textContent = e.message; err.style.display = 'block'; }
 }
 
@@ -807,8 +843,13 @@ function viewItem(id) {
 function editItem(id) { openItemM(_items.find(x => x.id === id)); }
 async function archItem(id, isArch) {
   if (!confirm(isArch ? 'Restore this item?' : 'Archive this item?')) return;
-  await sb.from('items').update({ archived: !isArch }).eq('id', id);
+  if (window.isEXE) {
+    await db.items.update(id, { archived: !isArch, _sync_status: 'pending' });
+  } else {
+    await sb.from('items').update({ archived: !isArch }).eq('id', id);
+  }
   addLog(isArch ? 'RESTORE_ITEM' : 'ARCHIVE_ITEM', `id:${id}`); toast(isArch ? 'Restored' : 'Archived', isArch ? 's' : 'w'); await refreshInv();
+  updatePendingCount();
 }
 function openManageCatM() {
   const cats = _cats || [];
@@ -997,50 +1038,33 @@ async function completeSale() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Processing…'; }
   try {
     const { sub, disc, total } = updTotal();
-    
-    // Get next receipt number locally
-    const lastSale = await db.sales.orderBy('receipt_no').last();
-    const rno = (lastSale ? lastSale.receipt_no : 0) + 1;
-    
-    const saleId = crypto.randomUUID();
-    const saleData = {
-      id: saleId,
-      receipt_no: rno, customer_name: cust, cashier, payment_method: pm,
-      subtotal: sub, discount: disc, total, paid,
-      paid_at: paid ? new Date().toISOString() : null,
-      created_by: CU?.id,
-      created_at: new Date().toISOString(),
-      _sync_status: 'pending'
-    };
+    let rno, saleData, saleItems;
 
-    await db.sales.add(saleData);
-
-    const saleItems = _cart.map(i => ({
-      id: crypto.randomUUID(),
-      sale_id: saleId,
-      item_id: i.id,
-      item_name: i.name,
-      item_sn: i.sn,
-      quantity: i.qty,
-      unit_price: i.price,
-      total: i.total,
-      unit: i.unit,
-      _sync_status: 'pending'
-    }));
-
-    await db.sale_items.bulkAdd(saleItems);
-
-    for (const ci of _cart) {
-      const cur = await db.items.get(ci.id);
-      if (cur) {
-        const newQty = Math.max(0, Number(cur.stock_qty || 0) - ci.qty);
-        await db.items.update(ci.id, { stock_qty: newQty, _sync_status: 'pending' });
+    if (window.isEXE) {
+      const lastSale = await db.sales.orderBy('receipt_no').last();
+      rno = (lastSale ? lastSale.receipt_no : 0) + 1;
+      const saleId = crypto.randomUUID();
+      saleData = { id: saleId, receipt_no: rno, customer_name: cust, cashier, payment_method: pm, subtotal: sub, discount: disc, total, paid, paid_at: paid ? new Date().toISOString() : null, created_by: CU?.id, created_at: new Date().toISOString(), _sync_status: 'pending' };
+      await db.sales.add(saleData);
+      saleItems = _cart.map(i => ({ id: crypto.randomUUID(), sale_id: saleId, item_id: i.id, item_name: i.name, item_sn: i.sn, quantity: i.qty, unit_price: i.price, total: i.total, unit: i.unit, _sync_status: 'pending' }));
+      await db.sale_items.bulkAdd(saleItems);
+      for (const ci of _cart) {
+        const cur = await db.items.get(ci.id);
+        if (cur) await db.items.update(ci.id, { stock_qty: Math.max(0, Number(cur.stock_qty || 0) - ci.qty), _sync_status: 'pending' });
       }
+    } else {
+      const { data: lastR } = await sb.from('sales').select('receipt_no').order('receipt_no', { ascending: false }).limit(1).single();
+      rno = (lastR ? lastR.receipt_no : 0) + 1;
+      const { data: sR, error: sE } = await sb.from('sales').insert({ receipt_no: rno, customer_name: cust, cashier, payment_method: pm, subtotal: sub, discount: disc, total, paid, paid_at: paid ? new Date().toISOString() : null, created_by: CU?.id }).select().single();
+      if (sE) throw sE;
+      saleData = sR;
+      saleItems = _cart.map(i => ({ sale_id: sR.id, item_id: i.id, item_name: i.name, item_sn: i.sn, quantity: i.qty, unit_price: i.price, total: i.total, unit: i.unit }));
+      await sb.from('sale_items').insert(saleItems);
+      for (const ci of _cart) await sb.rpc('decrement_stock', { i_id: ci.id, amt: ci.qty });
     }
 
     addLog('SALE', `No.${rno} | ${cust} | ${fmtM(total)} | ${pm}`);
-    
-    const ok = $('saleok'); 
+    const ok = $('saleok');
     const saleForPrint = { ...saleData, items: saleItems };
     if (ok) {
       ok.style.display = 'block'; ok.innerHTML = `<div class="al als" style="margin-top:16px;border-width:2px;background:#f0fdf4">
@@ -1051,28 +1075,34 @@ async function completeSale() {
     }
     toast(`Receipt No.${rno} generated!`, 's');
     _cart = []; renderCart(); $('posc').value = '';
-    
-    const freshItems = await db.items.where('archived').equals(0).toArray();
-    const cats = await db.categories.toArray();
-    _posItems = freshItems.map(i => ({ ...i, categories: cats.find(c => c.id === i.category_id) }));
-    filterPOS($('posq')?.value || '');
-    updatePendingCount();
+    await refreshInv(); updatePendingCount();
   } catch (e) { toast(e.message, 'e'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = '✅ Complete Sale'; } }
 }
 
 // ════════════════════════════════════ RECEIPT PRINT
 async function printRcptById(saleId) {
-  const s = await db.sales.get(saleId);
-  const items = await db.sale_items.where('sale_id').equals(saleId).toArray();
-  if (!s) return;
-  const cfgData = await db.settings.toArray();
-  const c = {}; cfgData.forEach(r => c[r.key] = r.value);
-  printRcpt({ ...s, items });
+  let s, items;
+  if (window.isEXE) {
+    s = await db.sales.get(saleId);
+    items = await db.sale_items.where('sale_id').equals(saleId).toArray();
+  } else {
+    const { data: sR } = await sb.from('sales').select('*').eq('id', saleId).single();
+    const { data: iR } = await sb.from('sale_items').select('*').eq('sale_id', saleId);
+    s = sR; items = iR;
+  }
+  if (s) printRcpt({ ...s, items });
 }
-function printRcpt(sale) {
+async function printRcpt(sale) {
   const cfg = {};
-  sb.from('settings').select('key,value').then(({ data }) => { (data || []).forEach(r => cfg[r.key] = r.value); _doPrint(sale, cfg); });
+  if (window.isEXE) {
+    const data = await db.settings.toArray();
+    data.forEach(r => cfg[r.key] = r.value);
+  } else {
+    const { data } = await sb.from('settings').select('key,value');
+    (data || []).forEach(r => cfg[r.key] = r.value);
+  }
+  _doPrint(sale, cfg);
 }
 function _doPrint(sale, cfg) {
   const d = new Date(sale.created_at || Date.now());
@@ -1156,14 +1186,14 @@ async function loadRcpt() {
 async function renderRcpt() {
   const from = $('rfrom')?.value, to = $('rto')?.value, pm = $('rpm')?.value, st = $('rst')?.value, sq = $('rq')?.value;
   let s = await db.sales.orderBy('created_at').reverse().toArray();
-  
+
   if (from) s = s.filter(x => x.created_at >= from);
   if (to) s = s.filter(x => x.created_at <= to + 'T23:59:59');
   if (pm) s = s.filter(x => x.payment_method === pm);
   if (st === 'paid') s = s.filter(x => x.paid);
   if (st === 'pend') s = s.filter(x => !x.paid);
   if (sq) { const ql = sq.toLowerCase(); s = s.filter(x => String(x.receipt_no).includes(sq) || x.customer_name?.toLowerCase().includes(ql)); }
-  
+
   const tot = s.reduce((a, x) => a + Number(x.total), 0);
   const el = $('rtbl'); if (!el) return;
   el.innerHTML = `<div class="al ali" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
@@ -1187,7 +1217,15 @@ async function renderRcpt() {
     </div></td>
   </tr>`).join('')}</tbody></table></div></div>` : '<div style="text-align:center;padding:50px;color:var(--mt)"><div style="font-size:42px;margin-bottom:10px">🧾</div><p>No receipts found</p></div>'}`;
 }
-async function markPaid(id) { await sb.from('sales').update({ paid: true, paid_at: new Date().toISOString() }).eq('id', id); addLog('MARK_PAID', `id:${id}`); toast('Marked paid'); renderRcpt(); }
+async function markPaid(id) {
+  if (window.isEXE) {
+    await db.sales.update(id, { paid: true, paid_at: new Date().toISOString(), _sync_status: 'pending' });
+  } else {
+    await sb.from('sales').update({ paid: true, paid_at: new Date().toISOString() }).eq('id', id);
+  }
+  addLog('MARK_PAID', `id:${id}`); toast('Marked paid'); renderRcpt();
+  updatePendingCount();
+}
 async function delRcpt(id) {
   if (!confirm('Permanently delete this receipt? This will recover the stock quantities.')) return;
   try {
@@ -1220,24 +1258,25 @@ async function loadAcct() {
 function tabA(t, btn) { document.querySelectorAll('#page-acct .tab').forEach(e => e.classList.remove('on')); document.querySelectorAll('#page-acct .tabp').forEach(e => e.classList.remove('on')); btn.classList.add('on'); $('a' + t).classList.add('on'); if (t === 'led') loadAcctLed(); else if (t === 'liab') loadAcctLiab(); }
 async function loadAcctSum() {
   ld($('asum'));
-  const sales = await db.sales.toArray();
-  const liabs = await db.liabilities.toArray();
-  const items = await db.items.where('archived').equals(0).toArray();
+  try {
+    const sales = await Data.getSales(2000);
+    const liabs = await Data.getLiabilities();
+    const items = await Data.getItems();
 
-  const totRev = sales.reduce((a, s) => a + Number(s.total), 0);
-  const totDisc = sales.reduce((a, s) => a + Number(s.discount || 0), 0);
-  const paidRev = sales.filter(s => s.paid).reduce((a, s) => a + Number(s.total), 0);
-  const pendRev = sales.filter(s => !s.paid).reduce((a, s) => a + Number(s.total), 0);
-  const totLiab = liabs.reduce((a, l) => a + Number(l.amount), 0);
-  const totGift = sales.filter(s => s.payment_method === 'Gift').reduce((a, s) => a + Number(s.total), 0);
+    const totRev = sales.reduce((a, s) => a + (Number(s.total) || 0), 0);
+    const totDisc = sales.reduce((a, s) => a + (Number(s.discount) || 0), 0);
+    const paidRev = sales.filter(s => s.paid).reduce((a, s) => a + (Number(s.total) || 0), 0);
+    const pendRev = sales.filter(s => !s.paid).reduce((a, s) => a + (Number(s.total) || 0), 0);
+    const totLiab = liabs.reduce((a, l) => a + (Number(l.amount) || 0), 0);
+    const totGift = sales.filter(s => s.payment_method === 'Gift').reduce((a, s) => a + (Number(s.total) || 0), 0);
 
-  const si = await db.sale_items.toArray();
-  const costMap = {}; items.forEach(i => costMap[i.id] = i.cost_price);
-  const totCOGS = (si || []).reduce((a, s) => a + (Number(s.quantity) * Number(costMap[s.item_id] || 0)), 0);
-  const profitRealized = totRev - totCOGS;
+    const si = await Data.getSaleItems();
+    const costMap = {}; items.forEach(i => costMap[i.id] = Number(i.cost_price) || 0);
+    const totCOGS = (si || []).reduce((a, s) => a + (Number(s.quantity || 0) * (Number(costMap[s.item_id]) || 0)), 0);
+    const profitRealized = totRev - totCOGS;
 
-  const unrealizedWorth = items.reduce((a, i) => a + (Number(i.sale_price) * Number(i.stock_qty)), 0);
-  const unrealizedProfit = items.reduce((a, i) => a + ((Number(i.sale_price) - Number(i.cost_price)) * Number(i.stock_qty)), 0);
+    const unrealizedWorth = items.reduce((a, i) => a + (Number(i.sale_price || 0) * Number(i.stock_qty || 0)), 0);
+    const unrealizedProfit = items.reduce((a, i) => a + ((Number(i.sale_price || 0) - Number(i.cost_price || 0)) * Number(i.stock_qty || 0)), 0);
 
   const byM = {}; sales.forEach(s => { const m = s.payment_method || 'Cash'; if (!byM[m]) byM[m] = { c: 0, t: 0 }; byM[m].c++; byM[m].t += Number(s.total); });
 
@@ -1755,15 +1794,11 @@ setInterval(async () => {
 }, 30000);
 
 // ════════════════════════════════════ BOOT
-// ════════════════════════════════════ BOOT
 async function boot() {
-  // Detect if running in Electron (Desktop EXE)
+  // Detect Environment
   const isElectron = navigator.userAgent.toLowerCase().includes(' electron/');
-  if (isElectron) {
-    document.body.classList.add('is-electron');
-  } else {
-    document.body.classList.add('is-browser');
-  }
+  window.isEXE = isElectron;
+  document.body.classList.add(isElectron ? 'is-exe' : 'is-web');
 
   const lm = $('LOAD-MSG'); if (lm) lm.textContent = 'Connecting to Supabase…';
   if (!hasCfg()) { $('LOAD').style.display = 'none'; showCfg(); return; }
@@ -1780,8 +1815,8 @@ async function boot() {
     if (itemCount === 0) {
       const { data: { session } } = await sb.auth.getSession();
       if (session) {
-         if (lm) lm.textContent = 'Performing initial data sync...';
-         await performSync();
+        if (lm) lm.textContent = 'Performing initial data sync...';
+        await performSync();
       }
     }
 
