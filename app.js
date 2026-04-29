@@ -1299,15 +1299,16 @@ async function loadAcctSum() {
   <div class="card"><div class="ct_">Sales Distribution by Method</div><div class="tw"><table>
   <thead><tr><th>Method</th><th>Count</th><th>Total</th></tr></thead>
   <tbody>${Object.entries(byM).map(([m, v]) => `<tr><td>${pmBadge(m)}</td><td class="tdm">${v.c}</td><td><strong>${fmtM(v.t)}</strong></td></tr>`).join('')}</tbody></table></div></div>`;
+  } catch (e) { $('asum').innerHTML = `<div class="al ale">Accounting error: ${e.message}</div>`; }
 }
 async function loadAcctLed() {
-  const { data: sales } = await sb.from('sales').select('*').order('created_at', { ascending: false });
+  const sales = await Data.getSales(500);
   $('aled').innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div class="tw"><table>
   <thead><tr><th>Date</th><th>Receipt#</th><th>Customer</th><th>Cashier</th><th>Sub</th><th>Disc</th><th>Total</th><th>Method</th><th>Status</th></tr></thead>
   <tbody>${(sales || []).map(s => `<tr><td class="tdm">${fmtDT(s.created_at)}</td><td><span class="bdg bb">No.${s.receipt_no}</span></td><td><strong>${esc(s.customer_name)}</strong></td><td class="tdm">${esc(s.cashier)}</td><td class="tdm">${fmtM(s.subtotal)}</td><td class="tdm">${fmtM(s.discount)}</td><td><strong style="color:var(--nv)">${fmtM(s.total)}</strong></td><td>${pmBadge(s.payment_method || 'Cash')}</td><td>${payBadge(s.paid)}</td></tr>`).join('')}</tbody></table></div></div>`;
 }
 async function loadAcctLiab() {
-  const { data: liabs } = await sb.from('liabilities').select('*').order('created_at', { ascending: false });
+  const liabs = await Data.getLiabilities();
   const tot = (liabs || []).reduce((a, l) => a + Number(l.amount), 0);
   $('aliab').innerHTML = `
   <div class="fb" style="background:#fef2f2;border:1px solid #fecaca">
@@ -1317,15 +1318,35 @@ async function loadAcctLiab() {
   </div>
   <div class="al" style="background:#fef2f2;color:#b91c1c;border-color:#ef4444;font-size:15px">Total Liabilities: <strong style="font-size:18px">${fmtM(tot)}</strong></div>
   <div class="card" style="padding:0;overflow:hidden"><div class="tw"><table>
-  <thead><tr><th>Date</th><th>Amount</th><th>Remarks</th><th>Added By</th><th>Actions</th></tr></thead>
-  <tbody>${(liabs || []).map(l => `<tr><td class="tdm">${fmtDT(l.created_at)}</td><td><strong style="color:var(--rd)">${fmtM(l.amount)}</strong></td><td>${esc(l.remarks)}</td><td class="tdm">${esc(l.added_by || '—')}</td><td><button class="btn bs bsm" style="color:var(--rd)" onclick="delLiab('${l.id}')">Delete</button></td></tr>`).join('')}</tbody></table></div></div>`;
+  <thead><tr><th>Date</th><th>Amount</th><th>Remarks</th><th>Actions</th></tr></thead>
+  <tbody>${(liabs || []).map(l => `<tr><td class="tdm">${fmtDT(l.created_at)}</td><td><strong style="color:var(--rd)">${fmtM(l.amount)}</strong></td><td>${esc(l.remarks)}</td><td><button class="btn bd bsm" onclick="delLiab('${l.id}')">Delete</button></td></tr>`).join('')}</tbody></table></div></div>`;
 }
-async function addLiab() { const a = parseFloat($('lamt')?.value), r = ($('lrem')?.value || '').trim(); if (isNaN(a) || a <= 0) { toast('Enter valid amount', 'e'); return; } if (!r) { toast('Enter remarks', 'e'); return; } await sb.from('liabilities').insert({ amount: a, remarks: r, added_by: CU?.username }); addLog('ADD_LIAB', `Rs.${a}: ${r}`); toast('Liability added'); loadAcctLiab(); }
-async function delLiab(id) { if (!confirm('Delete liability?')) return; await sb.from('liabilities').delete().eq('id', id); addLog('DEL_LIAB', `id:${id}`); toast('Deleted'); loadAcctLiab(); }
+async function addLiab() {
+  const a = parseFloat($('lamt')?.value), r = ($('lrem')?.value || '').trim();
+  if (isNaN(a) || a <= 0) { toast('Enter valid amount', 'e'); return; }
+  if (!r) { toast('Enter remarks', 'e'); return; }
+  const payload = { id: crypto.randomUUID(), amount: a, remarks: r, created_at: new Date().toISOString() };
+  if (window.isEXE) {
+    await db.liabilities.add({ ...payload, _sync_status: 'pending' });
+  } else {
+    await sb.from('liabilities').insert(payload);
+  }
+  addLog('ADD_LIAB', `Rs.${a}: ${r}`); toast('Liability added'); loadAcctLiab();
+  updatePendingCount();
+}
+async function delLiab(id) {
+  if (!confirm('Delete liability?')) return;
+  if (window.isEXE) {
+    await db.liabilities.delete(id);
+  } else {
+    await sb.from('liabilities').delete().eq('id', id);
+  }
+  addLog('DEL_LIAB', `id:${id}`); toast('Deleted'); loadAcctLiab();
+}
 
 // ════════════════════════════════════ REPORTS
 async function loadRep() {
-  const { data: catsD } = await sb.from('categories').select('*').order('name');
+  const catsD = await Data.getCategories();
   $('page-rep').innerHTML = `
   <div class="ph"><div class="pt">Reports &amp; Export</div></div>
   <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
@@ -1360,75 +1381,71 @@ function showRep(t, btn) {
 }
 async function runRep() {
   const out = $('repout'); if (!out) return; ld(out);
-  if (_repType === 'sales') {
-    let q = sb.from('sales').select('*').order('created_at', { ascending: false });
-    const from = $('rff')?.value, to = $('rft')?.value, pm = $('rfpm')?.value, st = $('rfst')?.value;
-    if (from) q = q.gte('created_at', from);
-    if (to) q = q.lte('created_at', to + 'T23:59:59');
-    if (pm) q = q.eq('payment_method', pm);
-    if (st === 'paid') q = q.eq('paid', true);
-    if (st === 'pend') q = q.eq('paid', false);
-    const { data: sales } = await q; const s = sales || []; _repData = s;
-
-    // Fetch all sale items for these sales to calculate profit
-    const sIds = s.map(x => x.id);
-    const { data: si } = sIds.length ? await sb.from('sale_items').select('sale_id,quantity,total,item_id') : { data: [] };
-    const { data: items } = await sb.from('items').select('id,cost_price');
-    const costMap = {}; (items || []).forEach(i => costMap[i.id] = i.cost_price);
-
-    const profitMap = {};
-    (si || []).forEach(item => {
-      if (!profitMap[item.sale_id]) profitMap[item.sale_id] = 0;
-      const itemCost = Number(item.quantity) * Number(costMap[item.item_id] || 0);
-      profitMap[item.sale_id] += (Number(item.total) - itemCost);
-    });
-
-    const totSub = s.reduce((a, x) => a + Number(x.subtotal), 0);
-    const totDisc = s.reduce((a, x) => a + Number(x.discount), 0);
-    const totVal = s.reduce((a, x) => a + Number(x.total), 0);
-    const totProf = Object.values(profitMap).reduce((a, v) => a + v, 0);
-
-    out.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="padding:16px 20px;background:#f8fafc;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center"><span class="ct_" style="margin:0">📈 Sales Report</span><div style="text-align:right"><div style="font-size:18px;font-weight:900;color:var(--nv)">${fmtM(totVal)}</div><div style="font-size:11px;color:var(--mt)">${s.length} receipts</div></div></div>
-    <div class="tw"><table><thead><tr><th>Receipt#</th><th>Customer</th><th>Subtotal</th><th>Disc</th><th>Total</th><th>Profit</th><th>Method</th><th>Paid</th><th>Date</th></tr></thead>
-    <tbody>${s.map(x => `<tr><td><span class="bdg bb">No.${x.receipt_no}</span></td><td><strong>${esc(x.customer_name)}</strong></td><td class="tdm">${fmtM(x.subtotal)}</td><td class="tdm">${fmtM(x.discount)}</td><td><strong style="color:var(--nv)">${fmtM(x.total)}</strong></td><td style="color:var(--gr);font-weight:700">${fmtM(profitMap[x.id] || 0)}</td><td>${pmBadge(x.payment_method || 'Cash')}</td><td>${payBadge(x.paid)}</td><td class="tdm">${fmtDT(x.created_at)}</td></tr>`).join('')}</tbody>
-    <tfoot style="background:var(--bg);font-weight:800"><tr><td colspan="2" style="text-align:right">TOTALS</td><td class="tdm">${fmtM(totSub)}</td><td class="tdm">${fmtM(totDisc)}</td><td><strong style="color:var(--nv)">${fmtM(totVal)}</strong></td><td style="color:var(--gr)">${fmtM(totProf)}</td><td colspan="3"></td></tr></tfoot>
-    </table></div></div>`;
-  } else if (_repType === 'inv') {
-    let q = sb.from('items').select('*,categories(name)').eq('archived', false).order('name');
-    const cat = $('rfcat')?.value, loc = ($('rfloc')?.value || '').trim();
-    if (cat) q = q.eq('category_id', cat);
-    if (loc) q = q.ilike('location', `%${loc}%`);
-    const { data: items } = await q; _repData = items || [];
-    out.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="padding:16px 20px;background:#f8fafc;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center"><span class="ct_" style="margin:0">📦 Inventory Status</span><span class="bdg bg">${(items || []).length} items</span></div>
-    <div class="tw"><table><thead><tr><th>S/N</th><th>Name</th><th>Category</th><th>Location</th><th>Cost</th><th>Sale Price</th><th>Stock</th><th>Min Alert</th></tr></thead>
-    <tbody>${(items || []).map(i => `<tr><td><code style="font-size:11px;background:#f1f5f9;padding:3px 5px;border-radius:4px">${esc(i.serial_number || '—')}</code></td><td><strong>${esc(i.name)}</strong></td><td class="tdm">${esc(i.categories?.name || '—')}</td><td class="tdm">${esc(i.location || '—')}</td><td>${fmtM(i.cost_price)}</td><td><strong style="color:var(--nv)">${fmtM(i.sale_price)}</strong></td><td>${stBadge(i.qty, i.min_stock_threshold)}</td><td class="tdm">${i.min_stock_threshold || 5}</td></tr>`).join('')}</tbody></table></div></div>`;
-  } else if (_repType === 'low') {
-    const { data: items } = await sb.from('items').select('*,categories(name)').eq('archived', false);
-    const low = (items || []).filter(i => Number(i.qty) <= Number(i.min_stock_threshold || 5)); _repData = low;
-    out.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="padding:16px 20px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;justify-content:space-between;align-items:center"><span class="ct_" style="margin:0;color:var(--rd)">⚠️ Low Stock Items</span><span class="bdg br_">${low.length} items</span></div>
-    <div class="tw"><table><thead><tr><th>S/N</th><th>Name</th><th>Category</th><th>Current Stock</th><th>Min Alert</th></tr></thead>
-    <tbody>${low.map(i => `<tr><td><code style="font-size:11px;background:#f1f5f9;padding:3px 5px;border-radius:4px">${esc(i.serial_number || '—')}</code></td><td><strong>${esc(i.name)}</strong></td><td class="tdm">${esc(i.categories?.name || '—')}</td><td>${stBadge(i.qty, i.min_stock_threshold)}</td><td class="tdm">${i.min_stock_threshold || 5}</td></tr>`).join('')}</tbody></table></div></div>`;
-  } else {
-    let sQ = sb.from('sales').select('total,paid,discount,payment_method');
-    let lQ = sb.from('liabilities').select('amount,remarks,created_at');
+  try {
+    let s = [], i = [], l = [];
     const from = $('rff')?.value, to = $('rft')?.value;
-    if (from) { sQ = sQ.gte('created_at', from); lQ = lQ.gte('created_at', from); }
-    if (to) { sQ = sQ.lte('created_at', to + 'T23:59:59'); lQ = lQ.lte('created_at', to + 'T23:59:59'); }
-    const [sR, lR] = await Promise.all([sQ, lQ]);
-    const sales = sR.data || [], liabs = lR.data || []; _repData = sales;
-    const byM = {}; sales.forEach(s => { const m = s.payment_method || 'Cash'; if (!byM[m]) byM[m] = { c: 0, t: 0 }; byM[m].c++; byM[m].t += Number(s.total); });
-    out.innerHTML = `<div class="stats-grid">
-      <div class="stat g"><div class="sl">Gross Revenue</div><div class="sv" style="color:var(--gr)">${fmtM(sales.reduce((a, s) => a + Number(s.total), 0))}</div></div>
-      <div class="stat o"><div class="sl">Discounts Given</div><div class="sv" style="color:var(--or)">${fmtM(sales.reduce((a, s) => a + Number(s.discount || 0), 0))}</div></div>
-      <div class="stat r"><div class="sl">Liabilities Added</div><div class="sv" style="color:var(--rd)">${fmtM(liabs.reduce((a, l) => a + Number(l.amount), 0))}</div></div>
-    </div>
-    <div class="card" style="padding:0;overflow:hidden">
-      <div style="padding:16px 20px;background:#f8fafc;border-bottom:1px solid var(--br)"><span class="ct_" style="margin:0">Revenue Breakdown</span></div>
-      <div class="tw"><table>
-      <thead><tr><th>Payment Method</th><th>Transaction Count</th><th>Total Revenue</th></tr></thead>
-      <tbody>${Object.entries(byM).map(([m, v]) => `<tr><td>${pmBadge(m)}</td><td class="tdm">${v.c}</td><td><strong style="color:var(--nv)">${fmtM(v.t)}</strong></td></tr>`).join('')}</tbody></table></div>
-    </div>`;
-  }
+
+    if (_repType === 'sales') {
+      s = await Data.getSales(10000);
+      if (from) s = s.filter(x => x.created_at >= from);
+      if (to) s = s.filter(x => x.created_at <= to + 'T23:59:59');
+      const pm = $('rfpm')?.value, st = $('rfst')?.value;
+      if (pm) s = s.filter(x => x.payment_method === pm);
+      if (st === 'paid') s = s.filter(x => x.paid);
+      if (st === 'pend') s = s.filter(x => !x.paid);
+
+      const si = await Data.getSaleItems();
+      const items = await Data.getItems();
+      const costMap = {}; items.forEach(x => costMap[x.id] = Number(x.cost_price) || 0);
+      const profitMap = {};
+      (si || []).forEach(item => {
+        if (!profitMap[item.sale_id]) profitMap[item.sale_id] = 0;
+        const itemCost = Number(item.quantity) * (Number(costMap[item.item_id]) || 0);
+        profitMap[item.sale_id] += (Number(item.total) - itemCost);
+      });
+
+      const totSub = s.reduce((a, x) => a + Number(x.subtotal || 0), 0);
+      const totDisc = s.reduce((a, x) => a + Number(x.discount || 0), 0);
+      const totVal = s.reduce((a, x) => a + Number(x.total || 0), 0);
+      const totProf = s.reduce((a, x) => a + (profitMap[x.id] || 0), 0);
+
+      out.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="padding:16px 20px;background:#f8fafc;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center"><span class="ct_" style="margin:0">📈 Sales Report</span><div style="text-align:right"><div style="font-size:18px;font-weight:900;color:var(--nv)">${fmtM(totVal)}</div><div style="font-size:11px;color:var(--mt)">${s.length} receipts</div></div></div>
+      <div class="tw"><table><thead><tr><th>Receipt#</th><th>Customer</th><th>Subtotal</th><th>Disc</th><th>Total</th><th>Profit</th><th>Method</th><th>Paid</th><th>Date</th></tr></thead>
+      <tbody>${s.map(x => `<tr><td><span class="bdg bb">No.${x.receipt_no}</span></td><td><strong>${esc(x.customer_name)}</strong></td><td class="tdm">${fmtM(x.subtotal)}</td><td class="tdm">${fmtM(x.discount)}</td><td><strong style="color:var(--nv)">${fmtM(x.total)}</strong></td><td style="color:var(--gr);font-weight:700">${fmtM(profitMap[x.id] || 0)}</td><td>${pmBadge(x.payment_method || 'Cash')}</td><td>${payBadge(x.paid)}</td><td class="tdm">${fmtDT(x.created_at)}</td></tr>`).join('')}</tbody>
+      <tfoot style="background:var(--bg);font-weight:800"><tr><td colspan="2" style="text-align:right">TOTALS</td><td class="tdm">${fmtM(totSub)}</td><td class="tdm">${fmtM(totDisc)}</td><td><strong style="color:var(--nv)">${fmtM(totVal)}</strong></td><td style="color:var(--gr)">${fmtM(totProf)}</td><td colspan="3"></td></tr></tfoot>
+      </table></div></div>`;
+      _repData = s;
+    } else if (_repType === 'inv' || _repType === 'low') {
+      i = await Data.getItems();
+      if (_repType === 'low') i = i.filter(x => Number(x.stock_qty) <= Number(x.min_stock_threshold || 5));
+      const cat = $('rfcat')?.value, loc = ($('rfloc')?.value || '').trim().toLowerCase();
+      if (cat) i = i.filter(x => x.category_id === cat);
+      if (loc) i = i.filter(x => x.location?.toLowerCase().includes(loc));
+
+      out.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="padding:16px 20px;background:#f8fafc;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center"><span class="ct_" style="margin:0">${_repType === 'low' ? '⚠️ Low Stock' : '📦 Inventory'}</span><span class="bdg bg">${i.length} items</span></div>
+      <div class="tw"><table><thead><tr><th>S/N</th><th>Name</th><th>Category</th><th>Location</th><th>Cost</th><th>Sale Price</th><th>Stock</th><th>Min Alert</th></tr></thead>
+      <tbody>${i.map(x => `<tr><td><code>${esc(x.serial_number || '—')}</code></td><td><strong>${esc(x.name)}</strong></td><td class="tdm">${esc(x.categories?.name || '—')}</td><td class="tdm">${esc(x.location || '—')}</td><td>${fmtM(x.cost_price)}</td><td><strong style="color:var(--nv)">${fmtM(x.sale_price)}</strong></td><td>${stBadge(x.stock_qty, x.min_stock_threshold)}</td><td class="tdm">${x.min_stock_threshold || 5}</td></tr>`).join('')}</tbody></table></div></div>`;
+      _repData = i;
+    } else if (_repType === 'acct') {
+      s = await Data.getSales(10000);
+      l = await Data.getLiabilities();
+      if (from) { s = s.filter(x => x.created_at >= from); l = l.filter(x => x.created_at >= from); }
+      if (to) { s = s.filter(x => x.created_at <= to + 'T23:59:59'); l = l.filter(x => x.created_at <= to + 'T23:59:59'); }
+      const byM = {}; s.forEach(x => { const m = x.payment_method || 'Cash'; if (!byM[m]) byM[m] = { c: 0, t: 0 }; byM[m].c++; byM[m].t += Number(x.total); });
+      out.innerHTML = `<div class="stats-grid">
+        <div class="stat g"><div class="sl">Gross Revenue</div><div class="sv" style="color:var(--gr)">${fmtM(s.reduce((a, x) => a + Number(x.total), 0))}</div></div>
+        <div class="stat o"><div class="sl">Discounts Given</div><div class="sv" style="color:var(--or)">${fmtM(s.reduce((a, x) => a + Number(x.discount || 0), 0))}</div></div>
+        <div class="stat r"><div class="sl">Liabilities Added</div><div class="sv" style="color:var(--rd)">${fmtM(l.reduce((a, x) => a + Number(x.amount), 0))}</div></div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:16px 20px;background:#f8fafc;border-bottom:1px solid var(--br)"><span class="ct_" style="margin:0">Revenue Breakdown</span></div>
+        <div class="tw"><table>
+        <thead><tr><th>Payment Method</th><th>Transaction Count</th><th>Total Revenue</th></tr></thead>
+        <tbody>${Object.entries(byM).map(([m, v]) => `<tr><td>${pmBadge(m)}</td><td class="tdm">${v.c}</td><td><strong style="color:var(--nv)">${fmtM(v.t)}</strong></td></tr>`).join('')}</tbody></table></div>
+      </div>`;
+      _repData = s;
+    }
+  } catch (e) { out.innerHTML = `<div class="al ale">Report error: ${e.message}</div>`; }
 }
 function expCSV() {
   if (!_repData.length) { toast('No data to export', 'w'); return; }
