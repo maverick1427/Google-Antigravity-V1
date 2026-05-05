@@ -2,10 +2,9 @@
   "name": "pafwa-inventory-system",
   "version": "1.0.0",
   "description": "PAFWA Inventory & Management System",
-  "main": "main.js",
+  "main": "index.html",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder"
+    "start": "npx serve ."
   },
   "keywords": [
     "inventory",
@@ -14,23 +13,8 @@
   ],
   "author": "FL Abbas Khan",
   "license": "ISC",
-  "devDependencies": {
-    "electron": "^41.3.0",
-    "electron-builder": "^26.8.1"
-  },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "dexie": "^3.2.4"
-  },
-  "build": {
-    "appId": "com.pafwa.inventory",
-    "productName": "PAFWA Inventory",
-    "win": {
-      "target": "portable",
-      "icon": "IMG-20260409-WA0035~3.ico"
-    },
-    "directories": {
-      "output": "dist"
-    }
   }
 }

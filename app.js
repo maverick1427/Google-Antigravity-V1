@@ -47,14 +47,7 @@ const Data = {
     return data || [];
   },
   async save(table, item) {
-    if (window.isEXE) {
-      const toSave = { ...item, _sync_status: 'pending' };
-      await db[table].put(toSave);
-      updatePendingCount();
-      return { data: toSave, error: null };
-    } else {
-      return await sb.from(table).upsert(item);
-    }
+    return await sb.from(table).upsert(item);
   }
 };
 
@@ -87,92 +80,39 @@ function initSB(url, key) {
 
 // ════════════════════════════════════ OFFLINE-FIRST HELPERS
 async function updatePendingCount() {
-  try {
-    let count = 0;
-    const tables = ['items', 'categories', 'sales', 'sale_items', 'liabilities', 'logs'];
-    for (const t of tables) {
-      count += await db[t].where('_sync_status').equals('pending').count();
-    }
-    const el = $('pending-count');
-    if (el) {
-      el.textContent = count;
-      el.style.color = count > 0 ? 'var(--or)' : 'var(--gr)';
-    }
-  } catch (e) { console.warn('Pending count error:', e); }
+  const el = $('pending-count');
+  if (el) {
+    el.textContent = '0';
+    el.style.color = 'var(--gr)';
+  }
 }
 
 async function performSync() {
   if (!sb || !CU) { toast('Please login to sync', 'w'); return; }
-  const sby = $('sbsy'); if (sby) sby.textContent = '🔄 Syncing…';
-
+  const sby = $('sbsy'); if (sby) sby.textContent = '🟢 Online';
+  
   try {
-    const tables = ['categories', 'items', 'sales', 'sale_items', 'liabilities', 'logs'];
-
-    // 1. PUSH LOCAL CHANGES
-    for (const t of tables) {
-      const pending = await db[t].where('_sync_status').equals('pending').toArray();
-      for (const item of pending) {
-        const { _sync_status, ...toUpload } = item;
-        // Handle inserts/updates (Supabase upsert)
-        const { error } = await sb.from(t).upsert(toUpload);
-        if (!error) {
-          await db[t].update(item.id || item.key, { _sync_status: 'synced' });
-        } else {
-          console.error(`Sync error for ${t}:`, error);
-        }
-      }
-    }
-
-    // 2. PULL REMOTE CHANGES
-    for (const t of ['categories', 'items', 'sales', 'liabilities', 'settings']) {
-      const { data, error } = await sb.from(t).select('*');
-      if (!error && data) {
-        for (const remoteItem of data) {
-          const localItem = await db[t].get(remoteItem.id || remoteItem.key);
-          // Only update if local is not pending OR remote is newer
-          if (!localItem || localItem._sync_status !== 'pending') {
-            await db[t].put({ ...remoteItem, _sync_status: 'synced' });
-          }
-        }
-      }
-    }
-
-    // 3. SPECIAL HANDLING FOR SALE ITEMS
-    const { data: siData, error: siErr } = await sb.from('sale_items').select('*');
-    if (!siErr && siData) {
-      for (const item of siData) {
-        await db.sale_items.put({ ...item, _sync_status: 'synced' });
-      }
-    }
-
-    if (sby) {
-      sby.textContent = '🟢 Synced';
-      sby.style.color = 'var(--gr)';
-    }
     await refreshInv();
-    // Auto-refresh the current page to show new data
     if (window._curP === 'dash') await loadDash();
     else if (window._curP === 'rcpt') await renderRcpt();
     else if (window._curP === 'acct') await loadAcctSum();
     else if (window._curP === 'rep') await loadRep();
-
-    updatePendingCount();
   } catch (e) {
-    if (sby) sby.textContent = '🔴 Sync Error';
+    if (sby) sby.textContent = '🔴 Error';
     throw e;
   }
 }
 
 async function syncNow() {
   const btn = $('sync-btn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '🔄 Syncing...'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '🔄 Refreshing...'; }
   try {
     await performSync();
-    toast('Sync Successful', 's');
+    toast('Data Refreshed', 's');
   } catch (e) {
-    toast('Sync Failed: ' + e.message, 'e');
+    toast('Refresh Failed: ' + e.message, 'e');
   } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '🔄 Sync with Cloud'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '🔄 Refresh Data'; }
   }
 }
 
@@ -202,6 +142,7 @@ function closeSidebar() { $('SB').classList.remove('open'); $('SB-OVERLAY').clas
 // ════════════════════════════════════ LOGGING
 async function addLog(action, detail) {
   try {
+    if (!sb || !CU) return;
     const log = {
       id: crypto.randomUUID(),
       user_id: CU?.id,
@@ -209,11 +150,9 @@ async function addLog(action, detail) {
       role: CU?.role,
       action,
       detail,
-      created_at: new Date().toISOString(),
-      _sync_status: 'pending'
+      created_at: new Date().toISOString()
     };
-    await db.logs.add(log);
-    updatePendingCount();
+    await sb.from('logs').insert(log);
   } catch (e) { console.warn('log error:', e.message); }
 }
 
@@ -441,10 +380,22 @@ async function loadInv() {
       <button class="btn bp" onclick="openItemM()">+ Add Item</button>
     </div>
   </div>
-  <div class="fb">
-    <input class="fi" id="iq" placeholder="🔍 Name, serial, location…" oninput="renderInv()">
+  <div class="fb" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+    <input class="fi" id="iq" placeholder="🔍 Name, serial, location…" oninput="renderInv()" style="flex:1;min-width:200px">
     <select id="icat" onchange="renderInv()"><option value="">All Categories</option></select>
+    <select id="iloc" onchange="renderInv()"><option value="">All Locations</option></select>
     <select id="ish" onchange="renderInv()"><option value="active">Active</option><option value="low">Low Stock</option><option value="arch">Archived</option></select>
+    <select id="isort" onchange="renderInv()">
+      <option value="name_asc">Sort: Name (A-Z)</option>
+      <option value="name_desc">Sort: Name (Z-A)</option>
+      <option value="loc_asc">Sort: Location (A-Z)</option>
+      <option value="cost_asc">Sort: Cost (Low to High)</option>
+      <option value="cost_desc">Sort: Cost (High to Low)</option>
+      <option value="price_asc">Sort: Sale Price (Low to High)</option>
+      <option value="price_desc">Sort: Sale Price (High to Low)</option>
+      <option value="stock_asc">Sort: Stock (Low to High)</option>
+      <option value="stock_desc">Sort: Stock (High to Low)</option>
+    </select>
   </div>
   <div id="itbl"></div>`;
   if (_invFilter) {
@@ -470,6 +421,13 @@ async function refreshInv() {
     const v = sel.value;
     sel.innerHTML = '<option value="">All Categories</option>' + _cats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
     sel.value = v;
+  }
+  const selLoc = $('iloc');
+  if (selLoc) {
+    const v = selLoc.value;
+    const locs = [...new Set(_items.map(i => i.location).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    selLoc.innerHTML = '<option value="">All Locations</option>' + locs.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('');
+    selLoc.value = v;
   }
   renderInv();
   updatePendingCount();
@@ -694,22 +652,39 @@ async function importExcel(input) {
 
 
 function renderInv() {
-  const q = ($('iq')?.value || '').toLowerCase(), cat = $('icat')?.value, sh = $('ish')?.value || 'active';
+  const q = ($('iq')?.value || '').toLowerCase();
+  const cat = $('icat')?.value;
+  const loc = $('iloc')?.value;
+  const sort = $('isort')?.value || 'name_asc';
+  const sh = $('ish')?.value || 'active';
+  
   let items = [..._items];
   if (sh === 'active') items = items.filter(i => !i.archived);
   else if (sh === 'arch') items = items.filter(i => i.archived);
   else if (sh === 'low') items = items.filter(i => !i.archived && Number(i.stock_qty) <= Number(i.min_stock_threshold || 5));
+  
   if (q) items = items.filter(i => i.name?.toLowerCase().includes(q) || i.serial_number?.toLowerCase().includes(q) || i.location?.toLowerCase().includes(q));
   if (cat) items = items.filter(i => i.category_id === cat);
+  if (loc) items = items.filter(i => i.location === loc);
+  
+  if (sort === 'name_asc') items.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  else if (sort === 'name_desc') items.sort((a,b) => (b.name||'').localeCompare(a.name||''));
+  else if (sort === 'loc_asc') items.sort((a,b) => (a.location||'').localeCompare(b.location||''));
+  else if (sort === 'cost_asc') items.sort((a,b) => Number(a.cost_price||0) - Number(b.cost_price||0));
+  else if (sort === 'cost_desc') items.sort((a,b) => Number(b.cost_price||0) - Number(a.cost_price||0));
+  else if (sort === 'price_asc') items.sort((a,b) => Number(a.sale_price||0) - Number(b.sale_price||0));
+  else if (sort === 'price_desc') items.sort((a,b) => Number(b.sale_price||0) - Number(a.sale_price||0));
+  else if (sort === 'stock_asc') items.sort((a,b) => Number(a.stock_qty||0) - Number(b.stock_qty||0));
+  else if (sort === 'stock_desc') items.sort((a,b) => Number(b.stock_qty||0) - Number(a.stock_qty||0));
   const cnt = $('icnt'); if (cnt) cnt.textContent = items.length + ' items';
   const el = $('itbl'); if (!el) return;
   if (!items.length) { el.innerHTML = '<div style="text-align:center;padding:50px;color:var(--mt)"><div style="font-size:48px;margin-bottom:10px">📦</div><p>No items found</p></div>'; return; }
   el.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div class="tw"><table>
   <thead><tr><th>S/N</th><th>Name</th><th>Category</th><th>Location</th><th>Cost</th><th>Sale Price</th><th>Stock</th><th>Actions</th></tr></thead>
   <tbody>${items.map(i => `<tr>
-    <td><code style="font-size:11px;background:#f1f5f9;padding:3px 5px;border-radius:4px">${esc(i.serial_number || '—')}</code></td>
+    <td><code style="font-size:11px;background:rgba(15,23,42,0.8);color:var(--neon-cyan);border:1px solid var(--neon-cyan);padding:3px 6px;border-radius:4px">${esc(i.serial_number || '—')}</code></td>
     <td><div style="display:flex;align-items:center;gap:10px">
-      ${i.image_url ? `<img src="${esc(i.image_url)}" style="width:32px;height:32px;border-radius:6px;object-fit:cover">` : '<div style="width:32px;height:32px;border-radius:6px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:16px">📦</div>'}
+      ${i.image_url ? `<img src="${esc(i.image_url)}" style="width:32px;height:32px;border-radius:6px;object-fit:cover">` : '<div style="width:32px;height:32px;border-radius:6px;background:rgba(30,41,59,0.8);border:1px solid var(--br);display:flex;align-items:center;justify-content:center;font-size:16px">📦</div>'}
       <div>
         <div style="font-weight:600;line-height:1.2">${esc(i.name)}${i.archived ? '<span class="bdg bgr" style="margin-left:6px">Archived</span>' : ''}</div>
         ${i.description ? `<div style="font-size:11px;color:var(--mt);margin-top:2px">${esc(i.description.slice(0, 40))}</div>` : ''}
@@ -799,8 +774,7 @@ async function submitItem(id) {
       cost_price: parseFloat($('ficp').value) || 0, sale_price: parseFloat($('fisp').value) || 0, discount_pct: parseFloat($('fidisc').value) || 0,
       stock_qty: parseInt($('fiq').value) || 0, min_stock_threshold: parseInt($('fimq').value) || 5, unit: $('fiunit').value.trim() || 'pcs',
       description: $('fidesc').value.trim(), image_url: imgUrl, image_path: imgPath, archived: false,
-      updated_at: new Date().toISOString(),
-      _sync_status: 'pending'
+      updated_at: new Date().toISOString()
     };
 
     if (window.isEXE) {
@@ -844,7 +818,7 @@ function editItem(id) { openItemM(_items.find(x => x.id === id)); }
 async function archItem(id, isArch) {
   if (!confirm(isArch ? 'Restore this item?' : 'Archive this item?')) return;
   if (window.isEXE) {
-    await db.items.update(id, { archived: !isArch, _sync_status: 'pending' });
+    await db.items.update(id, { archived: !isArch });
   } else {
     await sb.from('items').update({ archived: !isArch }).eq('id', id);
   }
@@ -1044,13 +1018,13 @@ async function completeSale() {
       const lastSale = await db.sales.orderBy('receipt_no').last();
       rno = (lastSale ? lastSale.receipt_no : 0) + 1;
       const saleId = crypto.randomUUID();
-      saleData = { id: saleId, receipt_no: rno, customer_name: cust, cashier, payment_method: pm, subtotal: sub, discount: disc, total, paid, paid_at: paid ? new Date().toISOString() : null, created_by: CU?.id, created_at: new Date().toISOString(), _sync_status: 'pending' };
+      saleData = { id: saleId, receipt_no: rno, customer_name: cust, cashier, payment_method: pm, subtotal: sub, discount: disc, total, paid, paid_at: paid ? new Date().toISOString() : null, created_by: CU?.id, created_at: new Date().toISOString() };
       await db.sales.add(saleData);
-      saleItems = _cart.map(i => ({ id: crypto.randomUUID(), sale_id: saleId, item_id: i.id, item_name: i.name, item_sn: i.sn, quantity: i.qty, unit_price: i.price, total: i.total, unit: i.unit, _sync_status: 'pending' }));
+      saleItems = _cart.map(i => ({ id: crypto.randomUUID(), sale_id: saleId, item_id: i.id, item_name: i.name, item_sn: i.sn, quantity: i.qty, unit_price: i.price, total: i.total, unit: i.unit }));
       await db.sale_items.bulkAdd(saleItems);
       for (const ci of _cart) {
         const cur = await db.items.get(ci.id);
-        if (cur) await db.items.update(ci.id, { stock_qty: Math.max(0, Number(cur.stock_qty || 0) - ci.qty), _sync_status: 'pending' });
+        if (cur) await db.items.update(ci.id, { stock_qty: Math.max(0, Number(cur.stock_qty || 0) - ci.qty) });
       }
     } else {
       const { data: lastR } = await sb.from('sales').select('receipt_no').order('receipt_no', { ascending: false }).limit(1).single();
@@ -1084,8 +1058,10 @@ async function completeSale() {
 async function printRcptById(saleId) {
   let s, items;
   if (window.isEXE) {
-    s = await db.sales.get(saleId);
-    items = await db.sale_items.where('sale_id').equals(saleId).toArray();
+    const { data: sD } = await sb.from('sales').select('*').eq('id', saleId).single();
+    s = sD;
+    const { data: siD } = await sb.from('sale_items').select('*').eq('sale_id', saleId);
+    items = siD || [];
   } else {
     const { data: sR } = await sb.from('sales').select('*').eq('id', saleId).single();
     const { data: iR } = await sb.from('sale_items').select('*').eq('sale_id', saleId);
@@ -1096,7 +1072,7 @@ async function printRcptById(saleId) {
 async function printRcpt(sale) {
   const cfg = {};
   if (window.isEXE) {
-    const data = await db.settings.toArray();
+    const { data } = await sb.from('settings').select('*');
     data.forEach(r => cfg[r.key] = r.value);
   } else {
     const { data } = await sb.from('settings').select('key,value');
@@ -1185,7 +1161,7 @@ async function loadRcpt() {
 }
 async function renderRcpt() {
   const from = $('rfrom')?.value, to = $('rto')?.value, pm = $('rpm')?.value, st = $('rst')?.value, sq = $('rq')?.value;
-  let s = await db.sales.orderBy('created_at').reverse().toArray();
+  let s = await Data.getSales(1000);
 
   if (from) s = s.filter(x => x.created_at >= from);
   if (to) s = s.filter(x => x.created_at <= to + 'T23:59:59');
@@ -1219,7 +1195,7 @@ async function renderRcpt() {
 }
 async function markPaid(id) {
   if (window.isEXE) {
-    await db.sales.update(id, { paid: true, paid_at: new Date().toISOString(), _sync_status: 'pending' });
+    await db.sales.update(id, { paid: true, paid_at: new Date().toISOString() });
   } else {
     await sb.from('sales').update({ paid: true, paid_at: new Date().toISOString() }).eq('id', id);
   }
@@ -1327,7 +1303,7 @@ async function addLiab() {
   if (!r) { toast('Enter remarks', 'e'); return; }
   const payload = { id: crypto.randomUUID(), amount: a, remarks: r, created_at: new Date().toISOString() };
   if (window.isEXE) {
-    await db.liabilities.add({ ...payload, _sync_status: 'pending' });
+    await db.liabilities.add({ ...payload });
   } else {
     await sb.from('liabilities').insert(payload);
   }
@@ -1483,7 +1459,8 @@ async function loadLogs() {
     </div>
   </div>
   <div id="logtbl">⏳ Loading…</div>`;
-  window._allLogs = await db.logs.orderBy('created_at').reverse().limit(500).toArray();
+  const { data } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(500);
+  window._allLogs = data || [];
   renderLogs();
 }
 function renderLogs() {
@@ -1755,7 +1732,7 @@ async function saveSettings() {
   addLog('SAVE_SETTINGS', 'Settings updated'); toast('Settings saved'); applyStyles();
 }
 async function applyStyles() {
-  const sets = await db.settings.toArray();
+  const { data: sets } = await sb.from('settings').select('*');
   const cfg = {}; (sets || []).forEach(r => cfg[r.key] = r.value);
   document.body.setAttribute('data-version', cfg.ui_version || 'v1');
   const isLogin = $('LOGIN').style.display === 'flex' || $('ADMIN-SCREEN').style.display === 'flex';
@@ -1827,17 +1804,6 @@ async function boot() {
       $('LOAD').style.display = 'none'; setupAuth(); return;
     }
 
-    // Check if local DB is empty and trigger sync if logged in
-    const itemCount = await db.items.count();
-    if (itemCount === 0) {
-      const { data: { session } } = await sb.auth.getSession();
-      if (session) {
-        if (lm) lm.textContent = 'Performing initial data sync...';
-        await performSync();
-      }
-    }
-
-    // Default to Login screen
     $('LOAD').style.display = 'none';
     $('LOGIN').style.display = 'flex';
     setupAuth();
