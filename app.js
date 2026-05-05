@@ -710,8 +710,8 @@ function openItemM(item = null) {
   openM(`<h2>${item ? '✏️ Edit Item' : '➕ Add New Item'}</h2>
   <div id="ie" class="al ale" style="display:none"></div>
   <div class="r2">
-    <div class="fg"><label>Item Name *</label><input id="fin" value="${esc(e.name || '')}"></div>
-    <div class="fg"><label>Serial Number</label><input id="fisn" value="${esc(e.serial_number || '')}" placeholder="Auto-generated if blank"></div>
+    <div class="fg"><label>Item Name *</label><input id="fin" value="${esc(e.name || '')}" oninput="if(!$('ficat').value) suggestSN()"></div>
+    <div class="fg"><label>Serial Number</label><input id="fisn" value="${esc(e.serial_number || '')}" placeholder="Auto-generated if blank" oninput="this.dataset.userEdited='true'"></div>
   </div>
   <div class="r3">
     <div class="fg">
@@ -766,7 +766,7 @@ async function submitItem(id) {
 
     let catId = $('ficat').value;
     let sn = $('fisn').value.trim();
-    if (!sn) sn = `PAF-${Date.now().toString(36).toUpperCase()}`;
+    if (!sn) sn = await suggestSN();
 
     const payload = {
       id: id || crypto.randomUUID(),
@@ -1529,15 +1529,25 @@ async function quickAddCat() {
   toast('Category added');
 }
 async function suggestSN(providedCatId = null) {
-  const catId = providedCatId || $('ficat').value;
-  if (!catId) return '';
-  const catName = _cats.find(c => c.id === catId)?.name || 'NONE';
-  let code = catName.split(' / ').pop().replace(/\s+/g, '').slice(0, 4).toUpperCase().padEnd(4, 'X');
+  const catId = providedCatId || $('ficat')?.value;
+  let code;
+  let countQuery;
+
+  if (!catId) {
+    const itemName = $('fin')?.value?.trim() || 'ITEM';
+    code = itemName.replace(/\s+/g, '').slice(0, 4).toUpperCase().padEnd(4, 'X');
+    countQuery = sb.from('items').select('*', { count: 'exact', head: true }).is('category_id', null);
+  } else {
+    const catName = _cats.find(c => c.id === catId)?.name || 'NONE';
+    code = catName.split(' / ').pop().replace(/\s+/g, '').slice(0, 4).toUpperCase().padEnd(4, 'X');
+    countQuery = sb.from('items').select('*', { count: 'exact', head: true }).eq('category_id', catId);
+  }
+
   const year = new Date().getFullYear();
-  const { count } = await sb.from('items').select('*', { count: 'exact', head: true }).eq('category_id', catId);
+  const { count } = await countQuery;
   const index = String((count || 0) + 1).padStart(3, '0');
   const finalSn = `${code}-${year}-${index}`;
-  if ($('fisn')) $('fisn').value = finalSn;
+  if ($('fisn') && !$('fisn').dataset.userEdited) $('fisn').value = finalSn;
   return finalSn;
 }
 async function submitAddUser() {
