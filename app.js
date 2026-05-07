@@ -61,14 +61,22 @@ async function processImage(file) {
 function setLoad(prog) {
   const bar = $('GLOBAL-LOADER');
   const lbl = $('FETCH-LABEL');
-  if (prog === 0) {
-    bar.style.width = '0%'; bar.classList.add('on');
+  if (!bar || !lbl) return;
+  
+  if (prog > 0 && prog < 100) {
+    bar.classList.add('on');
     lbl.style.display = 'block';
+    bar.style.width = prog + '%';
   } else if (prog === 100) {
     bar.style.width = '100%';
-    setTimeout(() => { bar.classList.remove('on'); bar.style.width = '0%'; lbl.style.display = 'none'; }, 500);
+    setTimeout(() => { 
+      bar.classList.remove('on'); 
+      setTimeout(() => { bar.style.width = '0%'; lbl.style.display = 'none'; }, 300);
+    }, 500);
   } else {
-    bar.style.width = prog + '%';
+    bar.style.width = '0%';
+    bar.classList.remove('on');
+    lbl.style.display = 'none';
   }
 }
 
@@ -76,45 +84,51 @@ function setLoad(prog) {
 const Data = {
   async getItems() {
     setLoad(20);
-    const { data } = await sb.from('items').select('*,categories(name)').eq('archived', false).order('name');
-    setLoad(100);
-    return data || [];
+    try {
+      const { data } = await sb.from('items').select('*,categories(name)').eq('archived', false).order('name');
+      return data || [];
+    } finally { setLoad(100); }
   },
   async getSales(limit = 100) {
     setLoad(30);
-    const { data } = await sb.from('sales').select('*').order('created_at', { ascending: false }).limit(limit);
-    setLoad(100);
-    return data || [];
+    try {
+      const { data } = await sb.from('sales').select('*').order('created_at', { ascending: false }).limit(limit);
+      return data || [];
+    } finally { setLoad(100); }
   },
   async getLiabilities() {
     setLoad(40);
-    const { data } = await sb.from('liabilities').select('*').order('created_at', { ascending: false });
-    setLoad(100);
-    return data || [];
+    try {
+      const { data } = await sb.from('liabilities').select('*').order('created_at', { ascending: false });
+      return data || [];
+    } finally { setLoad(100); }
   },
   async getCategories() {
     setLoad(10);
-    const { data } = await sb.from('categories').select('*').order('name');
-    setLoad(100);
-    return data || [];
+    try {
+      const { data } = await sb.from('categories').select('*').order('name');
+      return data || [];
+    } finally { setLoad(100); }
   },
   async getSaleItems() {
     setLoad(50);
-    const { data } = await sb.from('sale_items').select('*');
-    setLoad(100);
-    return data || [];
+    try {
+      const { data } = await sb.from('sale_items').select('*');
+      return data || [];
+    } finally { setLoad(100); }
   },
   async getMaintenance() {
     setLoad(20);
-    const { data } = await sb.from('maintenance').select('*').order('created_at', { ascending: false });
-    setLoad(100);
-    return data || [];
+    try {
+      const { data } = await sb.from('maintenance').select('*').order('created_at', { ascending: false });
+      return data || [];
+    } finally { setLoad(100); }
   },
   async save(table, item) {
     setLoad(50);
-    const res = await sb.from(table).upsert(item);
-    setLoad(100);
-    return res;
+    try {
+      return await sb.from(table).upsert(item);
+    } finally { setLoad(100); }
   }
 };
 
@@ -939,13 +953,8 @@ function viewItem(id) {
 function editItem(id) { openItemM(_items.find(x => x.id === id)); }
 async function archItem(id, isArch) {
   if (!confirm(isArch ? 'Restore this item?' : 'Archive this item?')) return;
-  if (window.isEXE) {
-    await db.items.update(id, { archived: !isArch });
-  } else {
-    await sb.from('items').update({ archived: !isArch }).eq('id', id);
-  }
+  await sb.from('items').update({ archived: !isArch }).eq('id', id);
   addLog(isArch ? 'RESTORE_ITEM' : 'ARCHIVE_ITEM', `id:${id}`); toast(isArch ? 'Restored' : 'Archived', isArch ? 's' : 'w'); await refreshInv();
-  updatePendingCount();
 }
 function openManageCatM() {
   const cats = _cats || [];
@@ -1176,28 +1185,14 @@ async function completeSale() {
 
 // ════════════════════════════════════ RECEIPT PRINT
 async function printRcptById(saleId) {
-  let s, items;
-  if (window.isEXE) {
-    const { data: sD } = await sb.from('sales').select('*').eq('id', saleId).single();
-    s = sD;
-    const { data: siD } = await sb.from('sale_items').select('*').eq('sale_id', saleId);
-    items = siD || [];
-  } else {
-    const { data: sR } = await sb.from('sales').select('*').eq('id', saleId).single();
-    const { data: iR } = await sb.from('sale_items').select('*').eq('sale_id', saleId);
-    s = sR; items = iR;
-  }
-  if (s) printRcpt({ ...s, items });
+  const { data: sR } = await sb.from('sales').select('*').eq('id', saleId).single();
+  const { data: iR } = await sb.from('sale_items').select('*').eq('sale_id', saleId);
+  if (sR) printRcpt({ ...sR, items: iR || [] });
 }
 async function printRcpt(sale) {
   const cfg = {};
-  if (window.isEXE) {
-    const { data } = await sb.from('settings').select('*');
-    data.forEach(r => cfg[r.key] = r.value);
-  } else {
-    const { data } = await sb.from('settings').select('key,value');
-    (data || []).forEach(r => cfg[r.key] = r.value);
-  }
+  const { data } = await sb.from('settings').select('key,value');
+  (data || []).forEach(r => cfg[r.key] = r.value);
   _doPrint(sale, cfg);
 }
 function _doPrint(sale, cfg) {
@@ -1706,12 +1701,8 @@ async function deleteMaint(id) {
   if (!confirm(msg)) return;
 
   try {
-    if (window.isEXE) {
-      await db.maintenance.delete(id);
-    } else {
-      const { error } = await sb.from('maintenance').delete().eq('id', id);
-      if (error) throw error;
-    }
+    const { error } = await sb.from('maintenance').delete().eq('id', id);
+    if (error) throw error;
     
     addLog('DEL_MAINT', `id:${id}`);
     toast('Record deleted');
@@ -2338,11 +2329,22 @@ setInterval(async () => {
 // ════════════════════════════════════ BOOT
 async function boot() {
   const lm = $('LOAD-MSG'); if (lm) lm.textContent = 'Connecting to Supabase…';
-  if (!hasCfg()) { $('LOAD').style.display = 'none'; showCfg(); return; }
+  
+  const timeout = setTimeout(() => {
+    $('LOAD').style.display = 'none';
+    const err = $('cfg-err');
+    if (err) err.textContent = 'Connection timeout. Check your internet.';
+    showCfg();
+  }, 10000);
+
+  if (!hasCfg()) { clearTimeout(timeout); $('LOAD').style.display = 'none'; showCfg(); return; }
   const { url, key } = getCfg();
-  if (!initSB(url, key)) { $('LOAD').style.display = 'none'; showCfg(); return; }
+  if (!initSB(url, key)) { clearTimeout(timeout); $('LOAD').style.display = 'none'; showCfg(); return; }
+  
   try {
     const { data, error } = await sb.from('profiles').select('id').limit(1);
+    clearTimeout(timeout);
+    
     if (error && error.code === '42501') {
       $('LOAD').style.display = 'none'; setupAuth(); return;
     }
@@ -2352,6 +2354,7 @@ async function boot() {
     setupAuth();
     if (typeof applyStyles === 'function') await applyStyles();
   } catch (e) {
+    clearTimeout(timeout);
     $('LOAD').style.display = 'none';
     const err = $('cfg-err');
     if (err) err.textContent = 'Connection failed: ' + e.message;
