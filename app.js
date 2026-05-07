@@ -159,28 +159,6 @@ function initSB(url, key) {
   catch (e) { return false; }
 }
 
-// ════════════════════════════════════ OFFLINE-FIRST HELPERS
-async function updatePendingCount() {
-  const el = $('pending-count');
-  if (el) {
-    el.textContent = '0';
-    el.style.color = 'var(--gr)';
-  }
-
-
-async function syncNow() {
-  const btn = $('sync-btn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '🔄 Refreshing...'; }
-  try {
-    await performSync();
-    toast('Data Refreshed', 's');
-  } catch (e) {
-    toast('Refresh Failed: ' + e.message, 'e');
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '🔄 Refresh Data'; }
-  }
-}
-
 
 // ════════════════════════════════════ UI UTILS
 let toastT;
@@ -917,7 +895,6 @@ async function submitItem(id) {
     } catch (e) {
       console.error('Submission error:', e);
       toast('Success (Adjusted)', 's'); closeM(); await refreshInv();
-    }
     }
   } catch (e) { err.textContent = e.message; err.style.display = 'block'; }
 }
