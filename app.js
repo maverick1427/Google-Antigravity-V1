@@ -375,6 +375,7 @@ async function loadDash() {
     <div class="ph">
       <div><div class="pt">Dashboard</div><div class="ps">${new Date().toLocaleDateString('en-PK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div></div>
       <div class="ph-acts">
+        <button class="btn bs bsm" onclick="loadDash()" title="Reload Dashboard Data" style="padding: 8px 12px">🔄 Refresh</button>
         <input id="gsq" style="width:280px;max-width:100%;padding:9px 12px;border:1.5px solid var(--br);border-radius:8px;font-size:13px;outline:none" placeholder="🔍 Search items, customers…" oninput="gSearch(this.value)">
       </div>
     </div>
@@ -442,6 +443,7 @@ async function loadInv() {
   <div class="ph">
     <div><div class="pt">Inventory</div><div class="ps" id="icnt">Loading…</div></div>
     <div class="ph-acts" id="inv-acts">
+      <button class="btn bs bsm" onclick="loadInv()" title="Reload Inventory" style="padding: 8px 12px">🔄 Refresh</button>
       ${(CU?.role==='admin'||CU?.permissions?.inv_edit) ? `<button class="btn bg_" onclick="$('upload-excel').click()">📄 Import Excel</button>
       <input type="file" id="upload-excel" accept=".xlsx, .xls, .csv" style="display:none" onchange="importExcel(this)">
       <button class="btn bs" onclick="openManageCatM()">⚙️ Categories</button>
@@ -2320,15 +2322,18 @@ async function boot() {
   
   try {
     const { data, error } = await sb.from('profiles').select('id').limit(1);
+    const { data: { session } } = await sb.auth.getSession();
     clearTimeout(timeout);
     
-    if (error && error.code === '42501') {
-      $('LOAD').style.display = 'none'; setupAuth(); return;
+    if (session?.user) {
+      // Session exists, setupAuth will handle UI transition
+      setupAuth();
+    } else {
+      $('LOAD').style.display = 'none';
+      $('LOGIN').style.display = 'flex';
+      setupAuth();
     }
-
-    $('LOAD').style.display = 'none';
-    $('LOGIN').style.display = 'flex';
-    setupAuth();
+    
     if (typeof applyStyles === 'function') await applyStyles();
   } catch (e) {
     clearTimeout(timeout);

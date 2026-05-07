@@ -371,6 +371,7 @@ textarea{resize:vertical;min-height:60px}
 }
 
 @media(max-width:900px){
+  .desktop-only { display: none !important; }
   .sb{position:fixed;transform:translateX(-100%);box-shadow:none}
   .sb.open{transform:translateX(0);box-shadow:12px 0 40px rgba(0,0,0,.4)}
   .sb-close{display:block}
