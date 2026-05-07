@@ -76,3 +76,32 @@ BEGIN
 
 END;
 $$;
+
+-- 5. Create Maintenance table for GE Shop repair tracking
+CREATE TABLE IF NOT EXISTS public.maintenance (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  item_id          uuid REFERENCES public.items(id),
+  item_name        text NOT NULL,
+  item_sn          text,
+  quantity         integer NOT NULL DEFAULT 1,
+  repair_type      text NOT NULL,
+  date_sent        date NOT NULL DEFAULT CURRENT_DATE,
+  est_return_date  date,
+  description      text DEFAULT '',
+  status           text NOT NULL DEFAULT 'Under Repair'
+                   CHECK (status IN ('Under Repair','Returned','Cancelled')),
+  date_returned    date,
+  created_by       text,
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  updated_at       timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.maintenance ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "maint_select" ON public.maintenance;
+CREATE POLICY "maint_select" ON public.maintenance
+  FOR SELECT USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "maint_write" ON public.maintenance;
+CREATE POLICY "maint_write" ON public.maintenance
+  FOR ALL USING (auth.uid() IS NOT NULL);

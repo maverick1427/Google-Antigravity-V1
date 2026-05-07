@@ -12,6 +12,7 @@ const LS_URL = 'pafwa_sb_url', LS_KEY = 'pafwa_sb_key';
 let sb = null, CU = null; // supabase client, current user
 let _cats = [], _items = [], _posItems = [], _cart = [], _repData = [], _repType = 'sales';
 let _invFilter = null, _rcptFilter = null;
+let _maintRecords = [];
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -46,7 +47,15 @@ const Data = {
     const { data } = await sb.from('sale_items').select('*');
     return data || [];
   },
+  async getMaintenance() {
+    if (window.isEXE) return await db.maintenance.orderBy('created_at').reverse().toArray();
+    const { data } = await sb.from('maintenance').select('*').order('created_at', { ascending: false });
+    return data || [];
+  },
   async save(table, item) {
+    if (window.isEXE) {
+      return await db[table].put(item);
+    }
     return await sb.from(table).upsert(item);
   }
 };
@@ -97,6 +106,7 @@ async function performSync() {
     else if (window._curP === 'rcpt') await renderRcpt();
     else if (window._curP === 'acct') await loadAcctSum();
     else if (window._curP === 'rep') await loadRep();
+    else if (window._curP === 'maint') { const r = await Data.getMaintenance(); _maintRecords = r; renderMaintTable(r); }
   } catch (e) {
     if (sby) sby.textContent = '🔴 Error';
     throw e;
@@ -288,7 +298,7 @@ function setupAuth() {
 
 // ════════════════════════════════════ NAVIGATION
 document.querySelectorAll('.ni[data-p]').forEach(b => b.addEventListener('click', () => goTo(b.dataset.p)));
-const LOADERS = { dash: loadDash, inv: loadInv, pos: loadPOS, rcpt: loadRcpt, acct: loadAcct, rep: loadRep, logs: loadLogs, users: loadUsers, bkp: loadBkp, cfg: loadCfg };
+const LOADERS = { dash: loadDash, inv: loadInv, pos: loadPOS, rcpt: loadRcpt, acct: loadAcct, rep: loadRep, logs: loadLogs, users: loadUsers, bkp: loadBkp, cfg: loadCfg, maint: loadMaint };
 function goTo(p) {
   const perms = CU?.permissions || {};
   const isAdmin = CU?.role === 'admin';
@@ -310,9 +320,10 @@ function goTo(p) {
 async function loadDash() {
   const el = $('page-dash'); ld(el);
   try {
-    const items = await Data.getItems();
-    const sales = await Data.getSales(200);
-    const liabs = await Data.getLiabilities();
+    const [items, sales, liabs, maint] = await Promise.all([
+      Data.getItems(), Data.getSales(200), Data.getLiabilities(), Data.getMaintenance()
+    ]);
+    _maintRecords = maint;
 
     const today = new Date().toISOString().slice(0, 10);
     const month = today.slice(0, 7);
@@ -324,6 +335,8 @@ async function loadDash() {
     const pendAmt = pend.reduce((a, s) => a + Number(s.total), 0);
     const lowItems = items.filter(i => Number(i.stock_qty) <= Number(i.min_stock_threshold || 5));
     const totalLiab = liabs.reduce((a, l) => a + Number(l.amount), 0);
+    const underRepair = maint.filter(r => r.status === 'Under Repair');
+    const overdue = underRepair.filter(r => r.est_return_date && r.est_return_date < today);
 
     el.innerHTML = `
     <div class="ph">
@@ -333,12 +346,17 @@ async function loadDash() {
       </div>
     </div>
     <div id="gsr" style="display:none;margin-bottom:14px"></div>
+    ${overdue.length ? `<div class="al alw" style="margin-bottom:16px;border-left:4px solid #f59e0b;cursor:pointer" onclick="goTo('maint')">
+      <strong>⚠️ Maintenance Overdue!</strong> ${overdue.length} item${overdue.length > 1 ? 's have' : ' has'} exceeded the estimated return date: 
+      <strong>${overdue.map(r => r.item_name).join(', ')}</strong>. Click to view.
+    </div>` : ''}
     <div class="stats-grid">
       <div class="stat" style="cursor:pointer" onclick="goTo('inv')"><div class="sl">Items</div><div class="sv">${items.length}</div><div class="ss">${items.reduce((a, i) => a + Number(i.stock_qty || 0), 0)} total units</div></div>
       <div class="stat g" style="cursor:pointer" onclick="goTo('rcpt')"><div class="sl">Sales Today</div><div class="sv" style="color:var(--gr)">${fmtM(todAmt)}</div><div class="ss">${todS.length} transactions</div></div>
       <div class="stat s" style="cursor:pointer" onclick="goTo('rep')"><div class="sl">This Month</div><div class="sv" style="color:var(--sk)">${fmtM(monAmt)}</div><div class="ss">${monS.length} transactions</div></div>
       <div class="stat o" style="cursor:pointer" onclick="_rcptFilter={st:'pend'};goTo('rcpt')"><div class="sl">Pending Cash</div><div class="sv" style="color:var(--or)">${fmtM(pendAmt)}</div><div class="ss">${pend.length} unpaid</div></div>
       <div class="stat ${lowItems.length ? 'r' : 'g'}" style="cursor:pointer" onclick="_invFilter={sh:'low'};goTo('inv')"><div class="sl">Low Stock</div><div class="sv" style="color:${lowItems.length ? 'var(--rd)' : 'var(--gr)'}">${lowItems.length}</div><div class="ss">${lowItems.length ? 'need restock' : 'All good ✓'}</div></div>
+      <div class="stat ${overdue.length ? 'r' : underRepair.length ? 'o' : 'g'}" style="cursor:pointer" onclick="goTo('maint')"><div class="sl">Under Repair</div><div class="sv" style="color:${overdue.length ? 'var(--rd)' : underRepair.length ? 'var(--or)' : 'var(--gr)'}">${underRepair.length}</div><div class="ss">${overdue.length ? `${overdue.length} overdue!` : underRepair.length ? 'at GE Shop' : 'None active ✓'}</div></div>
     </div>
     <div class="gw">
       <div class="card">
@@ -360,6 +378,13 @@ async function loadDash() {
         <tbody>${lowItems.map(i => `<tr><td style="font-size:12px;font-weight:600">${esc(i.name)}</td><td style="text-align:right">${stBadge(i.stock_qty, i.min_stock_threshold)}</td></tr>`).join('')}</tbody></table></div>`
         : '<div style="color:var(--gr);font-size:13px;padding:10px 0">✅ All items are adequately stocked.</div>'}
         ${totalLiab > 0 ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--br)"><div class="sl">Total Liabilities</div><div style="font-size:20px;font-weight:800;color:var(--rd)">${fmtM(totalLiab)}</div></div>` : ''}
+        ${underRepair.length ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--br)"><div class="ch"><span class="ct_">🔧 Active Repairs</span><button class="btn bs bsm" onclick="goTo('maint')">View All</button></div>
+        <div class="tw"><table><thead><tr><th>Item</th><th>Repair Type</th><th>Est. Return</th></tr></thead>
+        <tbody>${underRepair.slice(0,5).map(r => `<tr style="${r.est_return_date && r.est_return_date < today ? 'background:#fff1f2' : ''}">
+          <td style="font-size:12px;font-weight:600">${esc(r.item_name)}${r.est_return_date && r.est_return_date < today ? ' <span class="bdg br_" style="font-size:10px">OVERDUE</span>' : ''}</td>
+          <td><span class="bdg bo" style="font-size:10px">${esc(r.repair_type)}</span></td>
+          <td class="tdm" style="color:${r.est_return_date && r.est_return_date < today ? 'var(--rd)' : 'inherit'};font-weight:${r.est_return_date && r.est_return_date < today ? '700' : '400'}">${fmtD(r.est_return_date) || '—'}</td>
+        </tr>`).join('')}</tbody></table></div>` : ''}
       </div>
     </div>`;
   } catch (e) { el.innerHTML = `<div class="al ale">Error: ${e.message}</div>`; }
@@ -441,6 +466,8 @@ async function refreshInv() {
   }
   renderInv();
   updatePendingCount();
+  // Also refresh maintenance cache for badge display
+  Data.getMaintenance().then(m => { _maintRecords = m; renderInv(); });
 }
 
 async function importExcel(input) {
@@ -696,7 +723,7 @@ function renderInv() {
     <td><div style="display:flex;align-items:center;gap:10px">
       ${i.image_url ? `<img src="${esc(i.image_url)}" style="width:32px;height:32px;border-radius:6px;object-fit:cover">` : '<div style="width:32px;height:32px;border-radius:6px;background:rgba(30,41,59,0.8);border:1px solid var(--br);display:flex;align-items:center;justify-content:center;font-size:16px">📦</div>'}
       <div>
-        <div style="font-weight:600;line-height:1.2">${esc(i.name)}${i.archived ? '<span class="bdg bgr" style="margin-left:6px">Archived</span>' : ''}</div>
+        <div style="font-weight:600;line-height:1.2">${esc(i.name)}${i.archived ? '<span class="bdg bgr" style="margin-left:6px">Archived</span>' : ''}${_maintRecords.some(r => r.item_id === i.id && r.status === 'Under Repair') ? '<span class="bdg bo" style="margin-left:6px;font-size:10px">🔧 Under Repair</span>' : ''}</div>
         ${i.description ? `<div style="font-size:11px;color:var(--mt);margin-top:2px">${esc(i.description.slice(0, 40))}</div>` : ''}
       </div>
     </div></td>
@@ -1357,6 +1384,298 @@ async function delLiab(id) {
     await sb.from('liabilities').delete().eq('id', id);
   }
   addLog('DEL_LIAB', `id:${id}`); toast('Deleted'); loadAcctLiab();
+}
+
+// ════════════════════════════════════ MAINTENANCE (GE SHOP)
+let _mEditId = null;
+
+async function loadMaint() {
+  const el = $('page-maint'); ld(el);
+  try {
+    const items = await Data.getItems();
+    const maint = await Data.getMaintenance();
+    _maintRecords = maint;
+
+    el.innerHTML = `
+    <div class="ph"><div class="pt">GE Shop Maintenance</div><div class="ps">Track items sent for repair or retouching</div></div>
+    
+    <div class="card" id="maint-form-card" style="margin-bottom:20px; border-top: 4px solid var(--or)">
+      <div class="ct_" id="mf-title">📤 Send Item to GE Shop</div>
+      <div class="g3" style="margin-top:15px">
+        <div>
+          <label class="sl">Select Item</label>
+          <select id="m-item" class="fi" onchange="updMaintItem()">
+            <option value="">-- Choose Item --</option>
+            ${items.filter(i => !i.archived).map(i => `<option value="${i.id}" data-sn="${esc(i.serial_number)}" data-stk="${i.stock_qty}">${esc(i.name)} (${esc(i.serial_number || 'No S/N')})</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="sl">Quantity</label>
+          <input id="m-qty" type="number" class="fi" value="1" min="1">
+          <div id="m-stk-info" style="font-size:11px;color:var(--mt);margin-top:4px"></div>
+        </div>
+        <div>
+          <label class="sl">Type of Repair</label>
+          <div style="display:flex;gap:5px">
+            <select id="m-type-sel" class="fi" style="flex:1" onchange="updMaintType(this.value)">
+              <option value="">-- Select Type --</option>
+              <option value="Polish">Polish</option>
+              <option value="Fix">Fix</option>
+              <option value="Retouch">Retouch</option>
+              <option value="Rewiring">Rewiring</option>
+              <option value="Full Repair">Full Repair</option>
+              <option value="CUSTOM">-- Custom Option --</option>
+            </select>
+            <input id="m-type-custom" class="fi" style="flex:1;display:none" placeholder="Enter custom type...">
+          </div>
+        </div>
+      </div>
+      <div class="g3" style="margin-top:15px">
+        <div>
+          <label class="sl">Date Sent</label>
+          <input id="m-date-sent" type="date" class="fi" value="${new Date().toISOString().split('T')[0]}">
+        </div>
+        <div>
+          <label class="sl">Est. Return Date</label>
+          <input id="m-date-est" type="date" class="fi">
+        </div>
+        <div>
+          <label class="sl">Description / Notes</label>
+          <textarea id="m-desc" class="fi" style="height:38px;padding-top:8px" placeholder="Details of the damage/repair..."></textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <button class="btn bo" onclick="submitMaint()" id="m-sub">Submit to GE Shop</button>
+        <button class="btn bs" onclick="clearMaintForm()">Clear / Cancel</button>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="ch" style="padding:15px 20px"><span class="ct_">📋 Maintenance Records</span></div>
+      <div id="m-list" class="tw"></div>
+    </div>`;
+    
+    renderMaintTable(maint);
+  } catch (e) { el.innerHTML = `<div class="al ale">Error loading Maintenance: ${e.message}</div>`; }
+}
+
+function updMaintItem() {
+  const sel = $('m-item');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && opt.value) {
+    $('m-stk-info').textContent = `Available stock: ${opt.dataset.stk}`;
+    $('m-qty').max = opt.dataset.stk;
+  } else {
+    $('m-stk-info').textContent = '';
+  }
+}
+
+function updMaintType(val) {
+  const custom = $('m-type-custom');
+  if (val === 'CUSTOM') {
+    custom.style.display = 'block';
+    custom.focus();
+  } else {
+    custom.style.display = 'none';
+  }
+}
+
+function renderMaintTable(data) {
+  const el = $('m-list'); if (!el) return;
+  if (!data.length) { el.innerHTML = '<div style="text-align:center;padding:50px;color:var(--mt)">No records found</div>'; return; }
+  
+  const today = new Date().toISOString().split('T')[0];
+  
+  el.innerHTML = `<table>
+    <thead><tr><th>Item</th><th>Qty</th><th>Type</th><th>Sent</th><th>Est. Return</th><th>Status</th><th>Notes</th><th>Actions</th></tr></thead>
+    <tbody>${data.map(r => {
+      const isOverdue = r.status === 'Under Repair' && r.est_return_date && r.est_return_date < today;
+      return `<tr style="${isOverdue ? 'background:rgba(239,68,68,0.05)' : ''}">
+      <td>
+        <div style="font-weight:600">${esc(r.item_name)}</div>
+        <div style="font-size:10px;color:var(--mt)">${esc(r.item_sn || 'No S/N')}</div>
+      </td>
+      <td class="tdm">${r.quantity}</td>
+      <td><span class="bdg bo" style="font-size:11px">${esc(r.repair_type)}</span></td>
+      <td class="tdm">${fmtD(r.date_sent)}</td>
+      <td class="tdm" style="color:${isOverdue ? 'var(--rd)' : 'inherit'};font-weight:${isOverdue ? '700' : '400'}">
+        ${fmtD(r.est_return_date) || '—'}
+        ${isOverdue ? '<div style="font-size:9px;color:var(--rd)">OVERDUE</div>' : ''}
+      </td>
+      <td><span class="bdg ${r.status === 'Under Repair' ? 'bo' : r.status === 'Returned' ? 'bg' : 'bgr'}">${r.status}</span></td>
+      <td class="tdm" style="max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.description)}">${esc(r.description)}</td>
+      <td>
+        <div style="display:flex;gap:5px">
+          ${r.status === 'Under Repair' ? `<button class="btn bg bsm" onclick="markMaintReturned('${r.id}')" title="Mark as Repaired & Restore Stock">✅ Item Repaired</button>` : ''}
+          <button class="btn bs bsm" onclick="editMaint('${r.id}')">Edit</button>
+          <button class="btn bd bsm" onclick="deleteMaint('${r.id}')">Delete</button>
+        </div>
+      </td>
+    </tr>`}).join('')}</tbody></table>`;
+}
+
+async function submitMaint() {
+  const itemId = $('m-item').value;
+  const qty = parseInt($('m-qty').value);
+  let type = $('m-type-sel').value;
+  if (type === 'CUSTOM') type = $('m-type-custom').value.trim();
+  const dateSent = $('m-date-sent').value;
+  const dateEst = $('m-date-est').value;
+  const desc = $('m-desc').value.trim();
+
+  if (!itemId) { toast('Please select an item', 'e'); return; }
+  if (isNaN(qty) || qty < 1) { toast('Enter valid quantity', 'e'); return; }
+  if (!type || type === 'CUSTOM') { toast('Enter repair type', 'e'); return; }
+
+  const items = await Data.getItems();
+  const item = items.find(i => i.id === itemId);
+  if (!item) { toast('Item not found', 'e'); return; }
+
+  // Check stock for new entries
+  if (!_mEditId && qty > item.stock_qty) {
+    toast(`Not enough stock. Available: ${item.stock_qty}`, 'e');
+    return;
+  }
+
+  const payload = {
+    item_id: itemId,
+    item_name: item.name,
+    item_sn: item.serial_number,
+    quantity: qty,
+    repair_type: type,
+    date_sent: dateSent,
+    est_return_date: dateEst || null,
+    description: desc,
+    status: 'Under Repair',
+    updated_at: new Date().toISOString()
+  };
+
+  if (_mEditId) {
+    payload.id = _mEditId;
+    // Note: In edit, we don't automatically adjust stock because it's complex to track the delta 
+    // unless we strictly enforce it. For simplicity, stock is only deducted on creation.
+  } else {
+    payload.id = crypto.randomUUID();
+    payload.created_at = new Date().toISOString();
+    
+    // Deduct Stock
+    item.stock_qty -= qty;
+    await Data.save('items', item);
+  }
+
+  try {
+    const { error } = await Data.save('maintenance', payload);
+    if (!window.isEXE && error) throw error;
+    
+    addLog(_mEditId ? 'EDIT_MAINT' : 'ADD_MAINT', `${item.name} x${qty}`);
+    toast(_mEditId ? 'Record updated' : 'Item sent to GE Shop');
+    clearMaintForm();
+    loadMaint();
+    refreshInv(); // Refresh global items cache
+  } catch (e) { toast('Error: ' + e.message, 'e'); }
+}
+
+async function editMaint(id) {
+  const rec = _maintRecords.find(r => r.id === id);
+  if (!rec) return;
+
+  _mEditId = id;
+  $('mf-title').textContent = '📝 Edit Maintenance Record';
+  $('m-sub').textContent = 'Update Record';
+  $('m-sub').className = 'btn bp';
+  $('m-item').value = rec.item_id;
+  $('m-item').disabled = true; // Don't allow changing item on edit to avoid stock mess
+  $('m-qty').value = rec.quantity;
+  $('m-qty').disabled = true; // Don't allow changing qty on edit
+  
+  const standardTypes = ['Polish', 'Fix', 'Retouch', 'Rewiring', 'Full Repair'];
+  if (standardTypes.includes(rec.repair_type)) {
+    $('m-type-sel').value = rec.repair_type;
+    $('m-type-custom').style.display = 'none';
+  } else {
+    $('m-type-sel').value = 'CUSTOM';
+    $('m-type-custom').value = rec.repair_type;
+    $('m-type-custom').style.display = 'block';
+  }
+  
+  $('m-date-sent').value = rec.date_sent;
+  $('m-date-est').value = rec.est_return_date || '';
+  $('m-desc').value = rec.description || '';
+  
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function clearMaintForm() {
+  _mEditId = null;
+  $('mf-title').textContent = '📤 Send Item to GE Shop';
+  $('m-sub').textContent = 'Submit to GE Shop';
+  $('m-sub').className = 'btn bo';
+  $('m-item').value = '';
+  $('m-item').disabled = false;
+  $('m-qty').value = '1';
+  $('m-qty').disabled = false;
+  $('m-type-sel').value = '';
+  $('m-type-custom').value = '';
+  $('m-type-custom').style.display = 'none';
+  $('m-date-sent').value = new Date().toISOString().split('T')[0];
+  $('m-date-est').value = '';
+  $('m-desc').value = '';
+  $('m-stk-info').textContent = '';
+}
+
+async function markMaintReturned(id) {
+  const rec = _maintRecords.find(r => r.id === id);
+  if (!rec) return;
+
+  if (!confirm(`Mark "${rec.item_name}" as repaired? This will restore ${rec.quantity} units to stock.`)) return;
+
+  try {
+    // 1. Update status
+    const updatePayload = { 
+      ...rec,
+      status: 'Returned', 
+      date_returned: new Date().toISOString().split('T')[0],
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await Data.save('maintenance', updatePayload);
+    if (!window.isEXE && error) throw error;
+
+    // 2. Restore Stock
+    const items = await Data.getItems();
+    const item = items.find(i => i.id === rec.item_id);
+    if (item) {
+      item.stock_qty += rec.quantity;
+      await Data.save('items', item);
+    }
+
+    addLog('MAINT_RETURN', `${rec.item_name} x${rec.quantity}`);
+    toast('Item returned and stock restored');
+    loadMaint();
+    refreshInv();
+  } catch (e) { toast('Error: ' + e.message, 'e'); }
+}
+
+async function deleteMaint(id) {
+  const rec = _maintRecords.find(r => r.id === id);
+  if (!rec) return;
+
+  let msg = 'Delete this record?';
+  if (rec.status === 'Under Repair') msg += '\nWarning: The deducted stock will NOT be restored automatically if you delete an active repair record. Use "Item Repaired" to restore stock.';
+  
+  if (!confirm(msg)) return;
+
+  try {
+    if (window.isEXE) {
+      await db.maintenance.delete(id);
+    } else {
+      const { error } = await sb.from('maintenance').delete().eq('id', id);
+      if (error) throw error;
+    }
+    
+    addLog('DEL_MAINT', `id:${id}`);
+    toast('Record deleted');
+    loadMaint();
+  } catch (e) { toast('Error: ' + e.message, 'e'); }
 }
 
 // ════════════════════════════════════ REPORTS
