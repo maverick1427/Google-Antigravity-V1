@@ -775,8 +775,36 @@ async function submitItem(id) {
     }
 
     let catId = $('ficat').value;
+
+    // ── AUTO-CREATE CATEGORY IF NONE SELECTED ──────────────────────────────────
+    if (!catId && name) {
+      // Derive category name: use first 1 or 2 meaningful words from item name
+      const words = name.trim().split(/\s+/);
+      const autoName = (words[0].length <= 3 && words.length > 1)
+        ? (words[0] + ' ' + words[1]) // e.g. "AC Unit" if first word is short
+        : words[0];                    // e.g. "Baby" from "Baby Set Net Cloth"
+      const titleName = autoName.charAt(0).toUpperCase() + autoName.slice(1).toLowerCase();
+
+      // Check if category already exists (case-insensitive)
+      let existingCat = _cats.find(c => c.name.toLowerCase() === titleName.toLowerCase());
+      if (!existingCat) {
+        // Create it in the database
+        const { data: newCat, error: catErr } = await sb.from('categories')
+          .insert({ name: titleName })
+          .select()
+          .single();
+        if (!catErr && newCat) {
+          existingCat = newCat;
+          _cats.push(newCat); // inject into local cache immediately
+          addLog('AUTO_CAT', `Auto-created category: ${titleName}`);
+        }
+      }
+      if (existingCat) catId = existingCat.id;
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
     let sn = $('fisn').value.trim();
-    if (!sn) sn = await suggestSN();
+    if (!sn) sn = await suggestSN(catId || null);
 
     const payload = {
       id: id || crypto.randomUUID(),
