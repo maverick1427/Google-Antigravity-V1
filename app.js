@@ -295,11 +295,11 @@ function setupAuth() {
       const { data: prof } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
       if (prof && prof.active) {
         CU = { id: prof.id, username: prof.username, fullName: prof.full_name, role: prof.role, permissions: prof.permissions || {} };
-        $('sbn').textContent = prof.full_name || prof.username;
-        $('sbr').textContent = prof.role;
-        $('sb-avatar').textContent = (prof.full_name || prof.username).charAt(0).toUpperCase();
-        $('sbsy').textContent = '🟢 Connected';
-        $('sbsy').style.color = 'var(--gr)';
+        const sbn = $('sbn'); if (sbn) sbn.textContent = prof.full_name || prof.username;
+        const sbr = $('sbr'); if (sbr) sbr.textContent = prof.role;
+        const sba = $('sb-avatar'); if (sba) sba.textContent = (prof.full_name || prof.username).charAt(0).toUpperCase();
+        const sbsy = $('sbsy'); if (sbsy) { sbsy.textContent = '🟢 Connected'; sbsy.style.color = 'var(--gr)'; }
+        const stu = $('status-user'); if (stu) stu.textContent = prof.username;
         
         const perms = CU.permissions || {};
         const isAdmin = CU.role === 'admin';
