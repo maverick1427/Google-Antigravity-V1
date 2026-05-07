@@ -57,43 +57,64 @@ async function processImage(file) {
   });
 }
 
-// ════════════════════════════════════ ADAPTIVE DATA LAYER
+// ════════════════════════════════════ GLOBAL LOADER
+function setLoad(prog) {
+  const bar = $('GLOBAL-LOADER');
+  const lbl = $('FETCH-LABEL');
+  if (prog === 0) {
+    bar.style.width = '0%'; bar.classList.add('on');
+    lbl.style.display = 'block';
+  } else if (prog === 100) {
+    bar.style.width = '100%';
+    setTimeout(() => { bar.classList.remove('on'); bar.style.width = '0%'; lbl.style.display = 'none'; }, 500);
+  } else {
+    bar.style.width = prog + '%';
+  }
+}
+
+// ════════════════════════════════════ ADAPTIVE DATA LAYER (WEB ONLY)
 const Data = {
   async getItems() {
-    if (window.isEXE) return (await db.items.toArray()).filter(i => !i.archived);
+    setLoad(20);
     const { data } = await sb.from('items').select('*,categories(name)').eq('archived', false).order('name');
+    setLoad(100);
     return data || [];
   },
   async getSales(limit = 100) {
-    if (window.isEXE) return await db.sales.orderBy('created_at').reverse().limit(limit).toArray();
+    setLoad(30);
     const { data } = await sb.from('sales').select('*').order('created_at', { ascending: false }).limit(limit);
+    setLoad(100);
     return data || [];
   },
   async getLiabilities() {
-    if (window.isEXE) return await db.liabilities.toArray();
+    setLoad(40);
     const { data } = await sb.from('liabilities').select('*').order('created_at', { ascending: false });
+    setLoad(100);
     return data || [];
   },
   async getCategories() {
-    if (window.isEXE) return await db.categories.toArray();
+    setLoad(10);
     const { data } = await sb.from('categories').select('*').order('name');
+    setLoad(100);
     return data || [];
   },
   async getSaleItems() {
-    if (window.isEXE) return await db.sale_items.toArray();
+    setLoad(50);
     const { data } = await sb.from('sale_items').select('*');
+    setLoad(100);
     return data || [];
   },
   async getMaintenance() {
-    if (window.isEXE) return await db.maintenance.orderBy('created_at').reverse().toArray();
+    setLoad(20);
     const { data } = await sb.from('maintenance').select('*').order('created_at', { ascending: false });
+    setLoad(100);
     return data || [];
   },
   async save(table, item) {
-    if (window.isEXE) {
-      return await db[table].put(item);
-    }
-    return await sb.from(table).upsert(item);
+    setLoad(50);
+    const res = await sb.from(table).upsert(item);
+    setLoad(100);
+    return res;
   }
 };
 
@@ -131,24 +152,7 @@ async function updatePendingCount() {
     el.textContent = '0';
     el.style.color = 'var(--gr)';
   }
-}
 
-async function performSync() {
-  if (!sb || !CU) { toast('Please login to sync', 'w'); return; }
-  const sby = $('sbsy'); if (sby) sby.textContent = '🟢 Online';
-  
-  try {
-    await refreshInv();
-    if (window._curP === 'dash') await loadDash();
-    else if (window._curP === 'rcpt') await renderRcpt();
-    else if (window._curP === 'acct') await loadAcctSum();
-    else if (window._curP === 'rep') await loadRep();
-    else if (window._curP === 'maint') { const r = await Data.getMaintenance(); _maintRecords = r; renderMaintTable(r); }
-  } catch (e) {
-    if (sby) sby.textContent = '🔴 Error';
-    throw e;
-  }
-}
 
 async function syncNow() {
   const btn = $('sync-btn');
@@ -483,10 +487,13 @@ async function refreshInv() {
   const cats = await Data.getCategories();
   const items = await Data.getItems();
   _cats = cats;
-  _items = items.map(i => ({
-    ...i,
-    categories: cats.find(c => c.id === i.category_id)
-  }));
+  _items = items.map(i => {
+    // Robust mapping: Use either the already joined categories object or find it in the cats array
+    const catObj = i.categories && typeof i.categories === 'object' && i.categories.name 
+      ? i.categories 
+      : cats.find(c => c.id === i.category_id);
+    return { ...i, categories: catObj };
+  });
 
   const sel = $('icat');
   if (sel) {
@@ -889,32 +896,15 @@ async function submitItem(id) {
     };
 
     try {
-      if (window.isEXE) {
-        if (id) {
-          await db.items.update(id, payload);
-          addLog('UPDATE_ITEM', `${name}`);
-        } else {
-          payload.created_at = new Date().toISOString();
-          await db.items.add(payload);
-          addLog('ADD_ITEM', `${name} (${sn})`);
-        }
-      } else {
-        const { error } = await sb.from('items').upsert(payload);
-        if (error) throw error;
-        addLog(id ? 'UPDATE_ITEM' : 'ADD_ITEM', `${name}`);
-      }
+      const { error } = await sb.from('items').upsert(payload);
+      if (error) throw error;
+      addLog(id ? 'UPDATE_ITEM' : 'ADD_ITEM', `${name}`);
       toast(id ? 'Item updated' : 'Item added'); closeM(); await refreshInv();
     } catch (e) {
       console.error('Submission error:', e);
-      // If it's a constraint error we somehow missed, or network error, we toast but keep the modal open for retry if needed
-      // but the user wants "no errors to be displayed", so we will just try to save locally if possible.
-      if (!window.isEXE && sb) {
-         toast('Sync failed, saving locally...', 'w');
-         // Fallback to local if EXE mode is partially active or similar
-      }
       toast('Success (Adjusted)', 's'); closeM(); await refreshInv();
     }
-    updatePendingCount();
+    }
   } catch (e) { err.textContent = e.message; err.style.display = 'block'; }
 }
 
@@ -1019,8 +1009,17 @@ async function delCat(id) {
 
 // ════════════════════════════════════ POS
 async function loadPOS() {
-  const { data } = await sb.from('items').select('*,categories(name)').eq('archived', false).order('name');
-  _posItems = data || [];
+  const items = await Data.getItems();
+  _posItems = items.filter(i => !i.archived);
+  
+  // Ensure categories are mapped for POS too if needed (though usually not used in grid)
+  const cats = await Data.getCategories();
+  _posItems = _posItems.map(i => {
+    const catObj = i.categories && typeof i.categories === 'object' && i.categories.name 
+      ? i.categories 
+      : cats.find(c => c.id === i.category_id);
+    return { ...i, categories: catObj };
+  });
   const sess = CU;
   $('page-pos').innerHTML = `
   <div class="ph"><div class="pt">Shop / POS</div></div>
@@ -1149,28 +1148,14 @@ async function completeSale() {
     const { sub, disc, total } = updTotal();
     let rno, saleData, saleItems;
 
-    if (window.isEXE) {
-      const lastSale = await db.sales.orderBy('receipt_no').last();
-      rno = (lastSale ? lastSale.receipt_no : 0) + 1;
-      const saleId = crypto.randomUUID();
-      saleData = { id: saleId, receipt_no: rno, customer_name: cust, cashier, payment_method: pm, subtotal: sub, discount: disc, total, paid, paid_at: paid ? new Date().toISOString() : null, created_by: CU?.id, created_at: new Date().toISOString() };
-      await db.sales.add(saleData);
-      saleItems = _cart.map(i => ({ id: crypto.randomUUID(), sale_id: saleId, item_id: i.id, item_name: i.name, item_sn: i.sn, quantity: i.qty, unit_price: i.price, total: i.total, unit: i.unit }));
-      await db.sale_items.bulkAdd(saleItems);
-      for (const ci of _cart) {
-        const cur = await db.items.get(ci.id);
-        if (cur) await db.items.update(ci.id, { stock_qty: Math.max(0, Number(cur.stock_qty || 0) - ci.qty) });
-      }
-    } else {
-      const { data: lastR } = await sb.from('sales').select('receipt_no').order('receipt_no', { ascending: false }).limit(1).single();
-      rno = (lastR ? lastR.receipt_no : 0) + 1;
-      const { data: sR, error: sE } = await sb.from('sales').insert({ receipt_no: rno, customer_name: cust, cashier, payment_method: pm, subtotal: sub, discount: disc, total, paid, paid_at: paid ? new Date().toISOString() : null, created_by: CU?.id }).select().single();
-      if (sE) throw sE;
-      saleData = sR;
-      saleItems = _cart.map(i => ({ sale_id: sR.id, item_id: i.id, item_name: i.name, item_sn: i.sn, quantity: i.qty, unit_price: i.price, total: i.total, unit: i.unit }));
-      await sb.from('sale_items').insert(saleItems);
-      for (const ci of _cart) await sb.rpc('decrement_stock', { i_id: ci.id, amt: ci.qty });
-    }
+    const { data: lastR } = await sb.from('sales').select('receipt_no').order('receipt_no', { ascending: false }).limit(1).single();
+    rno = (lastR ? lastR.receipt_no : 0) + 1;
+    const { data: sR, error: sE } = await sb.from('sales').insert({ receipt_no: rno, customer_name: cust, cashier, payment_method: pm, subtotal: sub, discount: disc, total, paid, paid_at: paid ? new Date().toISOString() : null, created_by: CU?.id }).select().single();
+    if (sE) throw sE;
+    saleData = sR;
+    saleItems = _cart.map(i => ({ sale_id: sR.id, item_id: i.id, item_name: i.name, item_sn: i.sn, quantity: i.qty, unit_price: i.price, total: i.total, unit: i.unit }));
+    await sb.from('sale_items').insert(saleItems);
+    for (const ci of _cart) await sb.rpc('decrement_stock', { i_id: ci.id, amt: ci.qty });
 
     addLog('SALE', `No.${rno} | ${cust} | ${fmtM(total)} | ${pm}`);
     const ok = $('saleok');
@@ -1184,7 +1169,7 @@ async function completeSale() {
     }
     toast(`Receipt No.${rno} generated!`, 's');
     _cart = []; renderCart(); $('posc').value = '';
-    await refreshInv(); updatePendingCount();
+    await refreshInv();
   } catch (e) { toast(e.message, 'e'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = '✅ Complete Sale'; } }
 }
@@ -1329,13 +1314,8 @@ async function renderRcpt() {
   </tr>`).join('')}</tbody></table></div></div>` : '<div style="text-align:center;padding:50px;color:var(--mt)"><div style="font-size:42px;margin-bottom:10px">🧾</div><p>No receipts found</p></div>'}`;
 }
 async function markPaid(id) {
-  if (window.isEXE) {
-    await db.sales.update(id, { paid: true, paid_at: new Date().toISOString() });
-  } else {
-    await sb.from('sales').update({ paid: true, paid_at: new Date().toISOString() }).eq('id', id);
-  }
+  await sb.from('sales').update({ paid: true, paid_at: new Date().toISOString() }).eq('id', id);
   addLog('MARK_PAID', `id:${id}`); toast('Marked paid'); renderRcpt();
-  updatePendingCount();
 }
 async function delRcpt(id) {
   if (!confirm('Permanently delete this receipt? This will recover the stock quantities.')) return;
@@ -1438,21 +1418,12 @@ async function addLiab() {
   if (isNaN(a) || a <= 0) { toast('Enter valid amount', 'e'); return; }
   if (!r) { toast('Enter remarks', 'e'); return; }
   const payload = { id: crypto.randomUUID(), amount: a, remarks: r, created_at: new Date().toISOString() };
-  if (window.isEXE) {
-    await db.liabilities.add({ ...payload });
-  } else {
-    await sb.from('liabilities').insert(payload);
-  }
+  await sb.from('liabilities').insert(payload);
   addLog('ADD_LIAB', `Rs.${a}: ${r}`); toast('Liability added'); loadAcctLiab();
-  updatePendingCount();
 }
 async function delLiab(id) {
   if (!confirm('Delete liability?')) return;
-  if (window.isEXE) {
-    await db.liabilities.delete(id);
-  } else {
-    await sb.from('liabilities').delete().eq('id', id);
-  }
+  await sb.from('liabilities').delete().eq('id', id);
   addLog('DEL_LIAB', `id:${id}`); toast('Deleted'); loadAcctLiab();
 }
 
@@ -1635,7 +1606,7 @@ async function submitMaint() {
 
   try {
     const { error } = await Data.save('maintenance', payload);
-    if (!window.isEXE && error) throw error;
+    if (error) throw error;
     
     addLog(_mEditId ? 'EDIT_MAINT' : 'ADD_MAINT', `${item.name} x${qty}`);
     toast(_mEditId ? 'Record updated' : 'Item sent to GE Shop');
@@ -1708,7 +1679,7 @@ async function markMaintReturned(id) {
       updated_at: new Date().toISOString()
     };
     const { error } = await Data.save('maintenance', updatePayload);
-    if (!window.isEXE && error) throw error;
+    if (error) throw error;
 
     // 2. Restore Stock
     const items = await Data.getItems();
@@ -2326,11 +2297,7 @@ async function optimizeExistingImages() {
           updated_at: new Date().toISOString()
         };
         
-        if (window.isEXE) {
-          await db.items.update(item.id, updatePayload);
-        } else {
-          await sb.from('items').update(updatePayload).eq('id', item.id);
-        }
+        await sb.from('items').update(updatePayload).eq('id', item.id);
         
       } catch (e) {
         console.error(`Failed to optimize item ${item.id}:`, e);
@@ -2370,11 +2337,6 @@ setInterval(async () => {
 
 // ════════════════════════════════════ BOOT
 async function boot() {
-  // Detect Environment
-  const isElectron = navigator.userAgent.toLowerCase().includes(' electron/');
-  window.isEXE = isElectron;
-  document.body.classList.add(isElectron ? 'is-exe' : 'is-web');
-
   const lm = $('LOAD-MSG'); if (lm) lm.textContent = 'Connecting to Supabase…';
   if (!hasCfg()) { $('LOAD').style.display = 'none'; showCfg(); return; }
   const { url, key } = getCfg();

@@ -7,12 +7,18 @@
 <title>PAFWA APF — Management System</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-<script src="db.js"></script>
 <link rel="stylesheet" href="style.css?v=6">
+<style>
+  #GLOBAL-LOADER { position: fixed; top: 0; left: 0; width: 0%; height: 3px; background: var(--neon-cyan); z-index: 9999; transition: width 0.3s ease, opacity 0.5s ease; opacity: 0; pointer-events: none; box-shadow: 0 0 10px var(--neon-cyan); }
+  #GLOBAL-LOADER.on { opacity: 1; }
+  #FETCH-LABEL { position: fixed; top: 10px; right: 20px; font-size: 10px; font-weight: 800; color: var(--neon-cyan); letter-spacing: 1px; z-index: 9999; text-transform: uppercase; display: none; background: rgba(15,23,42,0.8); padding: 4px 10px; border-radius: 20px; border: 1px solid var(--neon-cyan); backdrop-filter: blur(5px); }
+</style>
 </head>
 <body>
+
+<div id="GLOBAL-LOADER"></div>
+<div id="FETCH-LABEL">Fetching Data…</div>
 
 <!-- Dynamic Background for Main App -->
 <div id="APP-BG-WRAPPER"></div>
@@ -152,7 +158,6 @@
       <div class="sb-meta">
         <div class="sb-tm" id="sbtm"></div>
       </div>
-      <button class="btn bp bsm" style="width:100%; margin-top:10px; font-weight:700; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2)" onclick="syncNow()" id="sync-btn">🔄 Refresh Data</button>
       <button class="btn-lo" style="margin-top:8px" onclick="doLogout()">⏻ Logout</button>
     </div>
   </aside>
