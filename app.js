@@ -251,14 +251,22 @@ function setupAuth() {
     if (session?.user) {
       const { data: prof } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
       if (prof && prof.active) {
-        CU = { id: prof.id, username: prof.username, fullName: prof.full_name, role: prof.role };
+        CU = { id: prof.id, username: prof.username, fullName: prof.full_name, role: prof.role, permissions: prof.permissions || {} };
         $('sbn').textContent = prof.full_name || prof.username;
         $('sbr').textContent = prof.role;
         $('sb-avatar').textContent = (prof.full_name || prof.username).charAt(0).toUpperCase();
         $('sbsy').textContent = '🟢 Connected';
         $('sbsy').style.color = 'var(--gr)';
-        if (prof.role !== 'admin') document.querySelectorAll('.adm').forEach(e => e.style.display = 'none');
-        else document.querySelectorAll('.adm').forEach(e => e.style.display = '');
+        
+        const perms = CU.permissions || {};
+        const isAdmin = CU.role === 'admin';
+        document.querySelectorAll('.ni[data-p="users"]').forEach(e => e.style.display = (isAdmin || perms.users_view) ? '' : 'none');
+        document.querySelectorAll('.ni[data-p="logs"]').forEach(e => e.style.display = (isAdmin || perms.act_view) ? '' : 'none');
+        document.querySelectorAll('.ni[data-p="acct"]').forEach(e => e.style.display = (isAdmin || perms.acct_view) ? '' : 'none');
+        document.querySelectorAll('.ni[data-p="pos"]').forEach(e => e.style.display = (isAdmin || perms.rcpt_gen) ? '' : 'none');
+        
+        const secAdmin = $('nav-sec-admin');
+        if (secAdmin) secAdmin.style.display = (isAdmin || perms.users_view || perms.act_view) ? '' : 'none';
         ['LOAD', 'LOGIN', 'CFG-SCREEN', 'ADMIN-SCREEN'].forEach(id => { const el = $(id); if (el) { el.style.display = 'none'; el.classList && el.classList.remove('on'); } });
         $('APP').classList.add('on');
         await refreshInv(); // This was the missing link to show your data
@@ -280,12 +288,14 @@ function setupAuth() {
 
 // ════════════════════════════════════ NAVIGATION
 document.querySelectorAll('.ni[data-p]').forEach(b => b.addEventListener('click', () => goTo(b.dataset.p)));
-const adminPages = ['logs', 'users'];
-document.querySelectorAll('.ni.adm').forEach((b, i) => { const p = ['logs', 'users'][i]; if (p) { b.dataset.p = p; b.addEventListener('click', () => goTo(p)); } });
-
 const LOADERS = { dash: loadDash, inv: loadInv, pos: loadPOS, rcpt: loadRcpt, acct: loadAcct, rep: loadRep, logs: loadLogs, users: loadUsers, bkp: loadBkp, cfg: loadCfg };
 function goTo(p) {
-  if (adminPages.includes(p) && CU?.role !== 'admin') { toast('Admin only', 'e'); return; }
+  const perms = CU?.permissions || {};
+  const isAdmin = CU?.role === 'admin';
+  if (p === 'users' && !isAdmin && !perms.users_view) { toast('Access denied', 'e'); return; }
+  if (p === 'logs' && !isAdmin && !perms.act_view) { toast('Access denied', 'e'); return; }
+  if (p === 'acct' && !isAdmin && !perms.acct_view) { toast('Access denied', 'e'); return; }
+  if (p === 'pos' && !isAdmin && !perms.rcpt_gen) { toast('Access denied', 'e'); return; }
   window._curP = p;
   document.querySelectorAll('.pg').forEach(e => e.classList.remove('on'));
   const pg = $('page-' + p);
@@ -373,11 +383,11 @@ async function loadInv() {
   el.innerHTML = `
   <div class="ph">
     <div><div class="pt">Inventory</div><div class="ps" id="icnt">Loading…</div></div>
-    <div class="ph-acts">
-      <button class="btn bg_" onclick="$('upload-excel').click()">📄 Import Excel</button>
+    <div class="ph-acts" id="inv-acts">
+      ${(CU?.role==='admin'||CU?.permissions?.inv_edit) ? `<button class="btn bg_" onclick="$('upload-excel').click()">📄 Import Excel</button>
       <input type="file" id="upload-excel" accept=".xlsx, .xls, .csv" style="display:none" onchange="importExcel(this)">
       <button class="btn bs" onclick="openManageCatM()">⚙️ Categories</button>
-      <button class="btn bp" onclick="openItemM()">+ Add Item</button>
+      <button class="btn bp" onclick="openItemM()">+ Add Item</button>` : ''}
     </div>
   </div>
   <div class="fb" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px">
@@ -697,8 +707,8 @@ function renderInv() {
     <td>${stBadge(i.stock_qty, i.min_stock_threshold)}</td>
     <td><div style="display:flex;gap:6px">
       <button class="btn bb_ bsm" onclick="viewItem('${i.id}')">View</button>
-      <button class="btn bs bsm" onclick="editItem('${i.id}')">Edit</button>
-      <button class="btn bd bsm" onclick="archItem('${i.id}',${!!i.archived})">${i.archived ? 'Restore' : 'Archive'}</button>
+      ${(CU?.role==='admin'||CU?.permissions?.inv_edit) ? `<button class="btn bs bsm" onclick="editItem('${i.id}')">Edit</button>
+      <button class="btn bd bsm" onclick="archItem('${i.id}',${!!i.archived})">${i.archived ? 'Restore' : 'Archive'}</button>` : ''}
     </div></td>
   </tr>`).join('')}
   </tbody></table></div></div>`;
@@ -1256,14 +1266,15 @@ async function loadAcctSum() {
 
   const byM = {}; sales.forEach(s => { const m = s.payment_method || 'Cash'; if (!byM[m]) byM[m] = { c: 0, t: 0 }; byM[m].c++; byM[m].t += Number(s.total); });
 
+  const showWorth = CU?.role === 'admin' || CU?.permissions?.worth_view;
   $('asum').innerHTML = `
   <div class="g3" style="margin-bottom:16px">
     <div class="stat g"><div class="sl">Total Sales Generated</div><div class="sv" style="color:var(--gr)">${fmtM(totRev)}</div><div class="ss">${sales.length} transactions</div></div>
     <div class="stat b"><div class="sl">Realized Profit</div><div class="sv" style="color:var(--bl)">${fmtM(profitRealized)}</div><div class="ss">Based on COGS</div></div>
-    <div class="stat s"><div class="sl">Unrealized Worth</div><div class="sv" style="color:var(--sk)">${fmtM(unrealizedWorth)}</div><div class="ss">Stock at Sale Price</div></div>
+    ${showWorth ? `<div class="stat s"><div class="sl">Unrealized Worth</div><div class="sv" style="color:var(--sk)">${fmtM(unrealizedWorth)}</div><div class="ss">Stock at Sale Price</div></div>` : ''}
   </div>
   <div class="g3" style="margin-bottom:16px">
-    <div class="stat o"><div class="sl">Unrealized Profit</div><div class="sv" style="color:var(--or)">${fmtM(unrealizedProfit)}</div><div class="ss">Expected Margin</div></div>
+    ${showWorth ? `<div class="stat o"><div class="sl">Unrealized Profit</div><div class="sv" style="color:var(--or)">${fmtM(unrealizedProfit)}</div><div class="ss">Expected Margin</div></div>` : ''}
     <div class="stat r"><div class="sl">Total Liabilities</div><div class="sv" style="color:var(--rd)">${fmtM(totLiab)}</div><div class="ss">From Ledger</div></div>
     <div class="stat r"><div class="sl">Pending Cash</div><div class="sv" style="color:var(--rd)">${fmtM(pendRev)}</div><div class="ss">Unpaid Receipts</div></div>
   </div>
@@ -1573,12 +1584,89 @@ async function submitAddUser() {
 }
 async function openEditUserM(id) {
   const { data: u } = await sb.from('profiles').select('*').eq('id', id).single();
-  openM(`<h2>✏️ Edit User: ${esc(u.username)}</h2>
-  <div class="fg"><label>Full Name</label><input id="efn" value="${esc(u.full_name || '')}"></div>
-  <div class="fg"><label>Role</label><select id="er" ${u.username === 'admin' ? 'disabled' : ''}><option value="staff"${u.role === 'staff' ? ' selected' : ''}>Staff</option><option value="admin"${u.role === 'admin' ? ' selected' : ''}>Admin</option></select></div>
-  <div class="mf"><button class="btn bp" onclick="submitEditUser('${id}')">Save Changes</button><button class="btn bs" onclick="closeM()">Cancel</button></div>`, '420px');
+  if (!u) { toast('User not found', 'e'); return; }
+  const p = u.permissions || {};
+  const isProtected = u.username === 'admin';
+
+  const ckHtml = (key, label, icon) => {
+    const checked = p[key] === true || p[key] === 'true';
+    return `<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--br);border-radius:8px;cursor:pointer;background:rgba(15,23,42,0.3);font-size:12px;font-weight:600;color:var(--tx)">
+      <input type="checkbox" id="ep_${key}" ${checked ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--neon-cyan);flex-shrink:0">
+      <span style="font-size:16px">${icon}</span> ${label}
+    </label>`;
+  };
+
+  openM(`<h2>✏️ Edit User: <span style="color:var(--neon-cyan)">${esc(u.username)}</span></h2>
+  <div id="eue" class="al ale" style="display:none"></div>
+
+  <div style="font-size:10px;font-weight:800;color:var(--neon-cyan);letter-spacing:1px;margin-bottom:8px;margin-top:4px">IDENTITY</div>
+  <div class="r2">
+    <div class="fg"><label>Full Name</label><input id="efn" value="${esc(u.full_name || '')}"></div>
+    <div class="fg"><label>Username</label><input id="eun" value="${esc(u.username)}" ${isProtected ? 'disabled' : ''} placeholder="Login username"></div>
+  </div>
+  <div class="r2">
+    <div class="fg"><label>Role</label><select id="er" ${isProtected ? 'disabled' : ''}><option value="staff"${u.role==='staff' ? ' selected' : ''}>Staff</option><option value="admin"${u.role==='admin' ? ' selected' : ''}>Admin</option></select></div>
+    <div class="fg"><label>New Password <span style="color:var(--mt);font-weight:400">(leave blank to keep)</span></label><div style="display:flex;gap:4px"><input type="password" id="epw" placeholder="Min 6 characters"><button class="btn bs" style="padding:0 10px;flex-shrink:0" onclick="togglePw('epw',this)">👁</button></div></div>
+  </div>
+
+  <div style="font-size:10px;font-weight:800;color:var(--neon-cyan);letter-spacing:1px;margin-bottom:10px;margin-top:8px;padding-top:14px;border-top:1px solid var(--br)">PERMISSIONS
+    <span style="color:var(--mt);font-weight:400;font-size:9px;text-transform:none;letter-spacing:0"> — only applies when role is Staff</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+    ${ckHtml('inv_edit',    'Inventory Editing', '📦')}
+    ${ckHtml('rcpt_gen',    'Receipt / Sale Generation', '🧾')}
+    ${ckHtml('users_view',  'User Management Tab', '👥')}
+    ${ckHtml('act_view',    'Activity Logs Tab', '📋')}
+    ${ckHtml('acct_view',   'Accounting Tab', '💰')}
+    ${ckHtml('worth_view',  'Inventory Worth / Cost Visibility', '💎')}
+    ${ckHtml('rcpt_del',    'Delete Receipts', '🗑️')}
+  </div>
+
+  <div class="mf">
+    <button class="btn bp" onclick="submitEditUser('${id}')">💾 Save Changes</button>
+    <button class="btn bs" onclick="closeM()">Cancel</button>
+  </div>`, '580px');
 }
-async function submitEditUser(id) { await sb.from('profiles').update({ full_name: $('efn').value.trim(), role: $('er').value }).eq('id', id); addLog('UPDATE_USER', `id:${id}`); toast('Updated'); closeM(); renderUsers(); }
+
+async function submitEditUser(id) {
+  const err = $('eue');
+  err.style.display = 'none';
+  try {
+    const fullName  = $('efn').value.trim();
+    const username  = $('eun').value.trim();
+    const role      = $('er').value;
+    const password  = $('epw').value;
+
+    if (!username) { err.textContent = 'Username cannot be empty'; err.style.display = 'block'; return; }
+    if (password && password.length < 6) { err.textContent = 'Password must be at least 6 characters'; err.style.display = 'block'; return; }
+
+    const permissions = {
+      inv_edit:   !!$('ep_inv_edit')?.checked,
+      rcpt_gen:   !!$('ep_rcpt_gen')?.checked,
+      users_view: !!$('ep_users_view')?.checked,
+      act_view:   !!$('ep_act_view')?.checked,
+      acct_view:  !!$('ep_acct_view')?.checked,
+      worth_view: !!$('ep_worth_view')?.checked,
+      rcpt_del:   !!$('ep_rcpt_del')?.checked,
+    };
+
+    const { error } = await sb.rpc('admin_update_user', {
+      target_user_id: id,
+      new_username:   username,
+      new_password:   password || '',
+      new_full_name:  fullName,
+      new_permissions: permissions,
+      new_role:       role
+    });
+    if (error) throw error;
+
+    addLog('UPDATE_USER', `Updated: ${username} (${role})`);
+    toast('User updated ✅'); closeM(); renderUsers();
+  } catch (e) {
+    err.textContent = e.message || 'Update failed';
+    err.style.display = 'block';
+  }
+}
 async function toggleUser(id, isActive) { if (!confirm(isActive ? 'Deactivate this user?' : 'Activate this user?')) return; await sb.from('profiles').update({ active: !isActive }).eq('id', id); addLog(isActive ? 'DEACTIVATE' : 'ACTIVATE', `id:${id}`); toast(isActive ? 'Deactivated' : 'Activated'); renderUsers(); }
 
 // ════════════════════════════════════ BACKUP
