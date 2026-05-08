@@ -5,20 +5,11 @@ on:
     branches:
       - main
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
-
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Inject Supabase Credentials
@@ -29,16 +20,9 @@ jobs:
           echo "Injecting Supabase credentials..."
           sed -i "s|SUPABASE_URL_PLACEHOLDER|${{ env.SUPABASE_URL }}|g" app.js
           sed -i "s|SUPABASE_KEY_PLACEHOLDER|${{ env.SUPABASE_KEY }}|g" app.js
-          echo "Credentials injected successfully!"
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '.'
 
       - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: '.'
