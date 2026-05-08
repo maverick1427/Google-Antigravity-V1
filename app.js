@@ -32,20 +32,20 @@ async function processImage(file) {
         const SIZE = 400; // Standard size for thumbnails and full view
         canvas.width = SIZE;
         canvas.height = SIZE;
-        
+
         // Fill background with black
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, SIZE, SIZE);
-        
+
         // Calculate contain proportions
         let w = img.width, h = img.height;
         const ratio = Math.min(SIZE / w, SIZE / h);
         w *= ratio; h *= ratio;
         const x = (SIZE - w) / 2;
         const y = (SIZE - h) / 2;
-        
+
         ctx.drawImage(img, x, y, w, h);
-        
+
         // Export as JPEG with compression to stay under 200KB
         canvas.toBlob((blob) => {
           resolve(blob);
@@ -62,15 +62,15 @@ function setLoad(prog) {
   const bar = $('GLOBAL-LOADER');
   const lbl = $('FETCH-LABEL');
   if (!bar || !lbl) return;
-  
+
   if (prog > 0 && prog < 100) {
     bar.classList.add('on');
     lbl.style.display = 'block';
     bar.style.width = prog + '%';
   } else if (prog === 100) {
     bar.style.width = '100%';
-    setTimeout(() => { 
-      bar.classList.remove('on'); 
+    setTimeout(() => {
+      bar.classList.remove('on');
       setTimeout(() => { bar.style.width = '0%'; lbl.style.display = 'none'; }, 300);
     }, 500);
   } else {
@@ -300,14 +300,14 @@ function setupAuth() {
         const sba = $('sb-avatar'); if (sba) sba.textContent = (prof.full_name || prof.username).charAt(0).toUpperCase();
         const sbsy = $('sbsy'); if (sbsy) { sbsy.textContent = '🟢 Connected'; sbsy.style.color = 'var(--gr)'; }
         const stu = $('status-user'); if (stu) stu.textContent = prof.username;
-        
+
         const perms = CU.permissions || {};
         const isAdmin = CU.role === 'admin';
         document.querySelectorAll('.ni[data-p="users"]').forEach(e => e.style.display = (isAdmin || perms.users_view) ? '' : 'none');
         document.querySelectorAll('.ni[data-p="logs"]').forEach(e => e.style.display = (isAdmin || perms.act_view) ? '' : 'none');
         document.querySelectorAll('.ni[data-p="acct"]').forEach(e => e.style.display = (isAdmin || perms.acct_view) ? '' : 'none');
         document.querySelectorAll('.ni[data-p="pos"]').forEach(e => e.style.display = (isAdmin || perms.rcpt_gen) ? '' : 'none');
-        
+
         const secAdmin = $('nav-sec-admin');
         if (secAdmin) secAdmin.style.display = (isAdmin || perms.users_view || perms.act_view) ? '' : 'none';
         ['LOAD', 'LOGIN', 'CFG-SCREEN', 'ADMIN-SCREEN'].forEach(id => { const el = $(id); if (el) { el.style.display = 'none'; el.classList && el.classList.remove('on'); } });
@@ -327,24 +327,6 @@ function setupAuth() {
     if ($('lbtn')) { $('lbtn').disabled = false; $('lbtn').textContent = '🔐 Sign In'; }
     CU = null;
   });
-}
-
-// ════════════════════════════════════ PENDING COUNT (receipt badge)
-async function updatePendingCount() {
-  try {
-    const { data } = await sb.from('sales').select('id', { count: 'exact', head: true }).eq('paid', false);
-    // If there's a badge element for pending count, update it
-    const badge = $('pend-count');
-    if (badge) badge.textContent = (data || 0);
-  } catch (e) { console.warn('updatePendingCount:', e.message); }
-}
-
-// ════════════════════════════════════ SIDEBAR TOGGLE
-function toggleSB() {
-  const sb = $('SB');
-  if (sb) sb.classList.toggle('open');
-  const ov = $('SB-OVERLAY');
-  if (ov) ov.classList.toggle('on');
 }
 
 // ════════════════════════════════════ NAVIGATION
@@ -432,7 +414,7 @@ async function loadDash() {
         ${totalLiab > 0 ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--br)"><div class="sl">Total Liabilities</div><div style="font-size:20px;font-weight:800;color:var(--rd)">${fmtM(totalLiab)}</div></div>` : ''}
         ${underRepair.length ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--br)"><div class="ch"><span class="ct_">🔧 Active Repairs</span><button class="btn bs bsm" onclick="goTo('maint')">View All</button></div>
         <div class="tw"><table><thead><tr><th>Item</th><th>Repair Type</th><th>Est. Return</th></tr></thead>
-        <tbody>${underRepair.slice(0,5).map(r => `<tr style="${r.est_return_date && r.est_return_date < today ? 'background:#fff1f2' : ''}">
+        <tbody>${underRepair.slice(0, 5).map(r => `<tr style="${r.est_return_date && r.est_return_date < today ? 'background:rgba(239,68,68,0.2)' : ''}">
           <td style="font-size:12px;font-weight:600">${esc(r.item_name)}${r.est_return_date && r.est_return_date < today ? ' <span class="bdg br_" style="font-size:10px">OVERDUE</span>' : ''}</td>
           <td><span class="bdg bo" style="font-size:10px">${esc(r.repair_type)}</span></td>
           <td class="tdm" style="color:${r.est_return_date && r.est_return_date < today ? 'var(--rd)' : 'inherit'};font-weight:${r.est_return_date && r.est_return_date < today ? '700' : '400'}">${fmtD(r.est_return_date) || '—'}</td>
@@ -462,7 +444,7 @@ async function loadInv() {
     <div><div class="pt">Inventory</div><div class="ps" id="icnt">Loading…</div></div>
     <div class="ph-acts" id="inv-acts">
       <button class="btn bs bsm" onclick="loadInv()" title="Reload Inventory" style="padding: 8px 12px">🔄 Refresh</button>
-      ${(CU?.role==='admin'||CU?.permissions?.inv_edit) ? `<button class="btn bg_" onclick="$('upload-excel').click()">📄 Import Excel</button>
+      ${(CU?.role === 'admin' || CU?.permissions?.inv_edit) ? `<button class="btn bg_" onclick="$('upload-excel').click()">📄 Import Excel</button>
       <input type="file" id="upload-excel" accept=".xlsx, .xls, .csv" style="display:none" onchange="importExcel(this)">
       <button class="btn bs" onclick="openManageCatM()">⚙️ Categories</button>
       <button class="btn bp" onclick="openItemM()">+ Add Item</button>` : ''}
@@ -501,8 +483,8 @@ async function refreshInv() {
   _cats = cats;
   _items = items.map(i => {
     // Robust mapping: Use either the already joined categories object or find it in the cats array
-    const catObj = i.categories && typeof i.categories === 'object' && i.categories.name 
-      ? i.categories 
+    const catObj = i.categories && typeof i.categories === 'object' && i.categories.name
+      ? i.categories
       : cats.find(c => c.id === i.category_id);
     return { ...i, categories: catObj };
   });
@@ -516,7 +498,7 @@ async function refreshInv() {
   const selLoc = $('iloc');
   if (selLoc) {
     const v = selLoc.value;
-    const locs = [...new Set(_items.map(i => i.location).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    const locs = [...new Set(_items.map(i => i.location).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     selLoc.innerHTML = '<option value="">All Locations</option>' + locs.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('');
     selLoc.value = v;
   }
@@ -750,25 +732,25 @@ function renderInv() {
   const loc = $('iloc')?.value;
   const sort = $('isort')?.value || 'name_asc';
   const sh = $('ish')?.value || 'active';
-  
+
   let items = [..._items];
   if (sh === 'active') items = items.filter(i => !i.archived);
   else if (sh === 'arch') items = items.filter(i => i.archived);
   else if (sh === 'low') items = items.filter(i => !i.archived && Number(i.stock_qty) <= Number(i.min_stock_threshold || 5));
-  
+
   if (q) items = items.filter(i => i.name?.toLowerCase().includes(q) || i.serial_number?.toLowerCase().includes(q) || i.location?.toLowerCase().includes(q));
   if (cat) items = items.filter(i => i.category_id === cat);
   if (loc) items = items.filter(i => i.location === loc);
-  
-  if (sort === 'name_asc') items.sort((a,b) => (a.name||'').localeCompare(b.name||''));
-  else if (sort === 'name_desc') items.sort((a,b) => (b.name||'').localeCompare(a.name||''));
-  else if (sort === 'loc_asc') items.sort((a,b) => (a.location||'').localeCompare(b.location||''));
-  else if (sort === 'cost_asc') items.sort((a,b) => Number(a.cost_price||0) - Number(b.cost_price||0));
-  else if (sort === 'cost_desc') items.sort((a,b) => Number(b.cost_price||0) - Number(a.cost_price||0));
-  else if (sort === 'price_asc') items.sort((a,b) => Number(a.sale_price||0) - Number(b.sale_price||0));
-  else if (sort === 'price_desc') items.sort((a,b) => Number(b.sale_price||0) - Number(a.sale_price||0));
-  else if (sort === 'stock_asc') items.sort((a,b) => Number(a.stock_qty||0) - Number(b.stock_qty||0));
-  else if (sort === 'stock_desc') items.sort((a,b) => Number(b.stock_qty||0) - Number(a.stock_qty||0));
+
+  if (sort === 'name_asc') items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  else if (sort === 'name_desc') items.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+  else if (sort === 'loc_asc') items.sort((a, b) => (a.location || '').localeCompare(b.location || ''));
+  else if (sort === 'cost_asc') items.sort((a, b) => Number(a.cost_price || 0) - Number(b.cost_price || 0));
+  else if (sort === 'cost_desc') items.sort((a, b) => Number(b.cost_price || 0) - Number(a.cost_price || 0));
+  else if (sort === 'price_asc') items.sort((a, b) => Number(a.sale_price || 0) - Number(b.sale_price || 0));
+  else if (sort === 'price_desc') items.sort((a, b) => Number(b.sale_price || 0) - Number(a.sale_price || 0));
+  else if (sort === 'stock_asc') items.sort((a, b) => Number(a.stock_qty || 0) - Number(b.stock_qty || 0));
+  else if (sort === 'stock_desc') items.sort((a, b) => Number(b.stock_qty || 0) - Number(a.stock_qty || 0));
   const cnt = $('icnt'); if (cnt) cnt.textContent = items.length + ' items';
   const el = $('itbl'); if (!el) return;
   if (!items.length) { el.innerHTML = '<div style="text-align:center;padding:50px;color:var(--mt)"><div style="font-size:48px;margin-bottom:10px">📦</div><p>No items found</p></div>'; return; }
@@ -790,7 +772,7 @@ function renderInv() {
     <td>${stBadge(i.stock_qty, i.min_stock_threshold)}</td>
     <td><div style="display:flex;gap:6px">
       <button class="btn bb_ bsm" onclick="viewItem('${i.id}')">View</button>
-      ${(CU?.role==='admin'||CU?.permissions?.inv_edit) ? `<button class="btn bs bsm" onclick="editItem('${i.id}')">Edit</button>
+      ${(CU?.role === 'admin' || CU?.permissions?.inv_edit) ? `<button class="btn bs bsm" onclick="editItem('${i.id}')">Edit</button>
       <button class="btn bd bsm" onclick="archItem('${i.id}',${!!i.archived})">${i.archived ? 'Restore' : 'Archive'}</button>` : ''}
     </div></td>
   </tr>`).join('')}
@@ -928,7 +910,7 @@ function viewItem(id) {
     </div>
     <div style="padding:0 10px">
       <h2 style="margin-bottom:15px;color:var(--nv)">${esc(i.name)}</h2>
-      <div class="r3" style="margin-bottom:20px;background:#f8fafc;padding:15px;border-radius:10px;border:1px solid var(--br)">
+      <div class="r3" style="margin-bottom:20px;background:var(--cd);padding:15px;border-radius:10px;border:1px solid var(--br)">
         <div><div class="tdm" style="font-size:10px;font-weight:800;letter-spacing:1px;margin-bottom:4px">SERIAL NUMBER</div><code style="font-size:14px;font-weight:800;color:var(--nv)">${esc(i.serial_number || '—')}</code></div>
         <div><div class="tdm" style="font-size:10px;font-weight:800;letter-spacing:1px;margin-bottom:4px">CATEGORY</div><strong style="font-size:14px">${esc(i.categories?.name || '—')}</strong></div>
         <div><div class="tdm" style="font-size:10px;font-weight:800;letter-spacing:1px;margin-bottom:4px">LOCATION</div><strong style="font-size:14px">${esc(i.location || '—')}</strong></div>
@@ -939,10 +921,10 @@ function viewItem(id) {
         <div class="stat g" style="padding:12px"><div class="sl" style="font-size:10px">Stock Available</div><div class="sv" style="font-size:18px">${i.stock_qty} ${esc(i.unit)}</div></div>
         <div class="stat o" style="padding:12px"><div class="sl" style="font-size:10px">Discount</div><div class="sv" style="font-size:18px">${i.discount_pct}%</div></div>
       </div>
-      ${i.description ? `<div style="margin-bottom:20px;background:#f8fafc;padding:15px;border-radius:10px;border:1px solid var(--br)"><div class="tdm" style="font-size:10px;font-weight:800;letter-spacing:1px;margin-bottom:8px">DESCRIPTION</div><p style="font-size:14px;line-height:1.6;color:var(--tx)">${esc(i.description)}</p></div>` : ''}
+      ${i.description ? `<div style="margin-bottom:20px;background:var(--cd);padding:15px;border-radius:10px;border:1px solid var(--br)"><div class="tdm" style="font-size:10px;font-weight:800;letter-spacing:1px;margin-bottom:8px">DESCRIPTION</div><p style="font-size:14px;line-height:1.6;color:var(--tx)">${esc(i.description)}</p></div>` : ''}
       <div class="mf" style="padding-top:10px;border-top:1px solid var(--br)">
         <button class="btn bs" onclick="closeM()" style="flex:1">Close</button>
-        ${(CU?.role==='admin'||CU?.permissions?.inv_edit) ? `<button class="btn bp" onclick="closeM();editItem('${id}')" style="flex:1">Edit Item</button>` : ''}
+        ${(CU?.role === 'admin' || CU?.permissions?.inv_edit) ? `<button class="btn bp" onclick="closeM();editItem('${id}')" style="flex:1">Edit Item</button>` : ''}
       </div>
     </div>
   </div>`, '540px');
@@ -970,7 +952,7 @@ function openManageCatM() {
   const pOpts = cats.filter(c => !c.name.includes(' / ')).map(c => `<option value="${c.name}">${esc(c.name)}</option>`).join('');
 
   openM(`<h2>⚙️ Manage Categories</h2>
-  <div style="max-height:280px;overflow-y:auto;margin-bottom:16px;background:#f8fafc;padding:12px;border-radius:8px;border:1px solid var(--br)">
+  <div style="max-height:280px;overflow-y:auto;margin-bottom:16px;background:var(--cd);padding:12px;border-radius:8px;border:1px solid var(--br)">
     ${rows || '<p style="color:var(--mt);font-size:12px">No categories found.</p>'}
   </div>
   <div style="font-weight:700;font-size:11px;color:var(--nv);margin-bottom:8px">ADD NEW CATEGORY</div>
@@ -1017,12 +999,12 @@ async function delCat(id) {
 async function loadPOS() {
   const items = await Data.getItems();
   _posItems = items.filter(i => !i.archived);
-  
+
   // Ensure categories are mapped for POS too if needed (though usually not used in grid)
   const cats = await Data.getCategories();
   _posItems = _posItems.map(i => {
-    const catObj = i.categories && typeof i.categories === 'object' && i.categories.name 
-      ? i.categories 
+    const catObj = i.categories && typeof i.categories === 'object' && i.categories.name
+      ? i.categories
       : cats.find(c => c.id === i.category_id);
     return { ...i, categories: catObj };
   });
@@ -1032,7 +1014,7 @@ async function loadPOS() {
   <div class="pos-w">
     <div class="pos-l">
       <div class="card" style="margin-bottom:14px;padding:14px">
-        <input id="posq" style="width:100%;padding:10px 14px;border:1.5px solid var(--br);border-radius:8px;font-size:14px;outline:none;background:#f8fafc" placeholder="🔍 Search items by name, serial, location…" oninput="filterPOS(this.value)">
+        <input id="posq" style="width:100%;padding:10px 14px;border:1.5px solid var(--br);border-radius:8px;font-size:14px;outline:none;background:#f8fafc;color:var(--nv);" placeholder="🔍 Search items by name, serial, location…" oninput="filterPOS(this.value)">
       </div>
       <div id="posgrid" class="ig"></div>
     </div>
@@ -1063,7 +1045,7 @@ async function loadPOS() {
         </div>
       </div>
       <div id="cartrows" style="flex:1;overflow-y:auto;min-height:120px;margin-bottom:12px"></div>
-      <div id="cartfoot" style="display:none;background:#f8fafc;padding:14px;border-radius:10px;margin-bottom:12px">
+      <div id="cartfoot" style="display:none;background:var(--cd);padding:14px;border-radius:10px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--mt);margin-bottom:6px"><span>Subtotal:</span><span id="possub">Rs. 0</span></div>
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--or);margin-bottom:10px;font-weight:600"><span>Discount:</span><span id="posdlbl">Rs. 0</span></div>
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:18px;font-weight:900;color:var(--nv);padding-top:10px;border-top:2px dashed var(--br)"><span>TOTAL</span><span id="postot">Rs. 0</span></div>
@@ -1078,16 +1060,16 @@ async function loadPOS() {
 
 function renderPOSGrid(items) {
   const el = $('posgrid'); if (!el) return;
-  if (!items.length) { el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--mt);background:#fff;border-radius:10px">No items found</div>'; return; }
+  if (!items.length) { el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--mt);background:var(--cd);border-radius:10px">No items found</div>'; return; }
   el.innerHTML = items.map(i => {
-    const oos = Number(i.stock_qty) <= 0; return `<div class="ic${oos ? ' oos' : ''}" onclick="${oos ? '' : 'addToCart(\'' + i.id + '\')'}" style="background:#fff;border:1px solid var(--br);padding:10px;display:flex;flex-direction:column;gap:5px">
+    const oos = Number(i.stock_qty) <= 0; return `<div class="ic${oos ? ' oos' : ''}" onclick="${oos ? '' : 'addToCart(\'' + i.id + '\')'}" style="background:var(--cd);border:1px solid var(--br);padding:10px;display:flex;flex-direction:column;gap:5px">
     <div class="ic-img" style="height:120px;background:#000;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:8px">
       ${i.image_url ? `<img src="${esc(i.image_url)}" style="max-width:100%;max-height:100%;object-fit:contain">` : '<span style="font-size:32px">📦</span>'}
     </div>
-    <div style="font-weight:800;font-size:14px;line-height:1.2;color:var(--tx);min-height:34px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(i.name)}</div>
+    <div style="font-weight:800;font-size:14px;line-height:1.2;color:var(--nv);min-height:34px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(i.name)}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:auto">
       <div style="font-size:16px;font-weight:900;color:var(--nv)">${fmtM(i.sale_price)}</div>
-      <div style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;${oos ? 'background:#fee2e2;color:#b91c1c' : 'background:#f0fdf4;color:#16a34a'}">${oos ? 'Out' : 'Stock: '+i.stock_qty}</div>
+      <div style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;${oos ? 'background:#fee2e2;color:#b91c1c' : 'background:#f0fdf4;color:#16a34a'}">${oos ? 'Out' : 'Stock: ' + i.stock_qty}</div>
     </div>
   </div>`;
   }).join('');
@@ -1126,7 +1108,7 @@ function updTotal() {
 function renderCart() {
   const cr = $('cartrows'), cf = $('cartfoot'), btn = $('posbtn'), clr = $('posclr'); if (!cr || !cf) return;
   if (!_cart.length) { cr.innerHTML = '<div style="text-align:center;padding:30px;color:var(--mt)"><div style="font-size:42px;margin-bottom:10px">🛒</div><p style="font-weight:600">Cart empty</p></div>'; cf.style.display = 'none'; btn.style.display = 'none'; clr.style.display = 'none'; return; }
-  cr.innerHTML = _cart.map(it => `<div class="ci" style="padding:12px;background:#fff;border-radius:8px;border:1px solid var(--br);margin-bottom:8px">
+  cr.innerHTML = _cart.map(it => `<div class="ci" style="padding:12px;background:var(--cd);border-radius:8px;border:1px solid var(--br);margin-bottom:8px">
     <div style="flex:1">
       <div style="font-weight:700;font-size:13px;color:var(--tx)">${esc(it.name)}</div>
       <div style="font-size:10px;color:var(--mt);font-family:monospace;margin-top:2px">${esc(it.sn)}</div>
@@ -1167,9 +1149,9 @@ async function completeSale() {
     const ok = $('saleok');
     const saleForPrint = { ...saleData, items: saleItems };
     if (ok) {
-      ok.style.display = 'block'; ok.innerHTML = `<div class="al als" style="margin-top:16px;border-width:2px;background:#f0fdf4">
-      <div style="font-size:16px;font-weight:800;color:var(--gr);margin-bottom:4px">✅ Sale Complete!</div>
-      <div style="font-size:13px;color:var(--tx);margin-bottom:12px">Receipt No: <strong style="font-size:14px">${rno}</strong> &nbsp;|&nbsp; Total: <strong style="font-size:14px">${fmtM(total)}</strong></div>
+      ok.style.display = 'block'; ok.innerHTML = `<div class="al als" style="margin-top:16px;border-width:2px">
+      <div style="font-size:16px;font-weight:800;color:#166534;margin-bottom:4px">✅ Sale Complete!</div>
+      <div style="font-size:13px;color:#166534;margin-bottom:12px">Receipt No: <strong style="font-size:14px">${rno}</strong> &nbsp;|&nbsp; Total: <strong style="font-size:14px">${fmtM(total)}</strong></div>
       <button class="btn bgd bfl" onclick='printRcpt(${JSON.stringify(saleForPrint)})'>🖨️ Print Receipt</button>
     </div>`;
     }
@@ -1361,10 +1343,10 @@ async function loadAcctSum() {
     const unrealizedWorth = items.reduce((a, i) => a + (Number(i.sale_price || 0) * Number(i.stock_qty || 0)), 0);
     const unrealizedProfit = items.reduce((a, i) => a + ((Number(i.sale_price || 0) - Number(i.cost_price || 0)) * Number(i.stock_qty || 0)), 0);
 
-  const byM = {}; sales.forEach(s => { const m = s.payment_method || 'Cash'; if (!byM[m]) byM[m] = { c: 0, t: 0 }; byM[m].c++; byM[m].t += Number(s.total); });
+    const byM = {}; sales.forEach(s => { const m = s.payment_method || 'Cash'; if (!byM[m]) byM[m] = { c: 0, t: 0 }; byM[m].c++; byM[m].t += Number(s.total); });
 
-  const showWorth = CU?.role === 'admin' || CU?.permissions?.worth_view;
-  $('asum').innerHTML = `
+    const showWorth = CU?.role === 'admin' || CU?.permissions?.worth_view;
+    $('asum').innerHTML = `
   <div class="g3" style="margin-bottom:16px">
     <div class="stat g"><div class="sl">Total Sales Generated</div><div class="sv" style="color:var(--gr)">${fmtM(totRev)}</div><div class="ss">${sales.length} transactions</div></div>
     <div class="stat b"><div class="sl">Realized Profit</div><div class="sv" style="color:var(--bl)">${fmtM(profitRealized)}</div><div class="ss">Based on COGS</div></div>
@@ -1487,7 +1469,7 @@ async function loadMaint() {
       <div class="ch" style="padding:15px 20px"><span class="ct_">📋 Maintenance Records</span></div>
       <div id="m-list" class="tw"></div>
     </div>`;
-    
+
     renderMaintTable(maint);
   } catch (e) { el.innerHTML = `<div class="al ale">Error loading Maintenance: ${e.message}</div>`; }
 }
@@ -1516,14 +1498,14 @@ function updMaintType(val) {
 function renderMaintTable(data) {
   const el = $('m-list'); if (!el) return;
   if (!data.length) { el.innerHTML = '<div style="text-align:center;padding:50px;color:var(--mt)">No records found</div>'; return; }
-  
+
   const today = new Date().toISOString().split('T')[0];
-  
+
   el.innerHTML = `<table>
     <thead><tr><th>Item</th><th>Qty</th><th>Type</th><th>Sent</th><th>Est. Return</th><th>Status</th><th>Notes</th><th>Actions</th></tr></thead>
     <tbody>${data.map(r => {
-      const isOverdue = r.status === 'Under Repair' && r.est_return_date && r.est_return_date < today;
-      return `<tr style="${isOverdue ? 'background:rgba(239,68,68,0.05)' : ''}">
+    const isOverdue = r.status === 'Under Repair' && r.est_return_date && r.est_return_date < today;
+    return `<tr style="${isOverdue ? 'background:rgba(239,68,68,0.2)' : ''}">
       <td>
         <div style="font-weight:600">${esc(r.item_name)}</div>
         <div style="font-size:10px;color:var(--mt)">${esc(r.item_sn || 'No S/N')}</div>
@@ -1590,7 +1572,7 @@ async function submitMaint() {
   } else {
     payload.id = crypto.randomUUID();
     payload.created_at = new Date().toISOString();
-    
+
     // Deduct Stock
     item.stock_qty -= qty;
     await Data.save('items', item);
@@ -1599,7 +1581,7 @@ async function submitMaint() {
   try {
     const { error } = await Data.save('maintenance', payload);
     if (error) throw error;
-    
+
     addLog(_mEditId ? 'EDIT_MAINT' : 'ADD_MAINT', `${item.name} x${qty}`);
     toast(_mEditId ? 'Record updated' : 'Item sent to GE Shop');
     clearMaintForm();
@@ -1620,7 +1602,7 @@ async function editMaint(id) {
   $('m-item').disabled = true; // Don't allow changing item on edit to avoid stock mess
   $('m-qty').value = rec.quantity;
   $('m-qty').disabled = true; // Don't allow changing qty on edit
-  
+
   const standardTypes = ['Polish', 'Fix', 'Retouch', 'Rewiring', 'Full Repair'];
   if (standardTypes.includes(rec.repair_type)) {
     $('m-type-sel').value = rec.repair_type;
@@ -1630,11 +1612,11 @@ async function editMaint(id) {
     $('m-type-custom').value = rec.repair_type;
     $('m-type-custom').style.display = 'block';
   }
-  
+
   $('m-date-sent').value = rec.date_sent;
   $('m-date-est').value = rec.est_return_date || '';
   $('m-desc').value = rec.description || '';
-  
+
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1664,9 +1646,9 @@ async function markMaintReturned(id) {
 
   try {
     // 1. Update status
-    const updatePayload = { 
+    const updatePayload = {
       ...rec,
-      status: 'Returned', 
+      status: 'Returned',
       date_returned: new Date().toISOString().split('T')[0],
       updated_at: new Date().toISOString()
     };
@@ -1694,13 +1676,13 @@ async function deleteMaint(id) {
 
   let msg = 'Delete this record?';
   if (rec.status === 'Under Repair') msg += '\nWarning: The deducted stock will NOT be restored automatically if you delete an active repair record. Use "Item Repaired" to restore stock.';
-  
+
   if (!confirm(msg)) return;
 
   try {
     const { error } = await sb.from('maintenance').delete().eq('id', id);
     if (error) throw error;
-    
+
     addLog('DEL_MAINT', `id:${id}`);
     toast('Record deleted');
     loadMaint();
@@ -1981,7 +1963,7 @@ async function openEditUserM(id) {
     <div class="fg"><label>Username</label><input id="eun" value="${esc(u.username)}" ${isProtected ? 'disabled' : ''} placeholder="Login username"></div>
   </div>
   <div class="r2">
-    <div class="fg"><label>Role</label><select id="er" ${isProtected ? 'disabled' : ''}><option value="staff"${u.role==='staff' ? ' selected' : ''}>Staff</option><option value="admin"${u.role==='admin' ? ' selected' : ''}>Admin</option></select></div>
+    <div class="fg"><label>Role</label><select id="er" ${isProtected ? 'disabled' : ''}><option value="staff"${u.role === 'staff' ? ' selected' : ''}>Staff</option><option value="admin"${u.role === 'admin' ? ' selected' : ''}>Admin</option></select></div>
     <div class="fg"><label>New Password <span style="color:var(--mt);font-weight:400">(leave blank to keep)</span></label><div style="display:flex;gap:4px"><input type="password" id="epw" placeholder="Min 6 characters"><button class="btn bs" style="padding:0 10px;flex-shrink:0" onclick="togglePw('epw',this)">👁</button></div></div>
   </div>
 
@@ -1989,13 +1971,13 @@ async function openEditUserM(id) {
     <span style="color:var(--mt);font-weight:400;font-size:9px;text-transform:none;letter-spacing:0"> — only applies when role is Staff</span>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
-    ${ckHtml('inv_edit',    'Inventory Editing', '📦')}
-    ${ckHtml('rcpt_gen',    'Receipt / Sale Generation', '🧾')}
-    ${ckHtml('users_view',  'User Management Tab', '👥')}
-    ${ckHtml('act_view',    'Activity Logs Tab', '📋')}
-    ${ckHtml('acct_view',   'Accounting Tab', '💰')}
-    ${ckHtml('worth_view',  'Inventory Worth / Cost Visibility', '💎')}
-    ${ckHtml('rcpt_del',    'Delete Receipts', '🗑️')}
+    ${ckHtml('inv_edit', 'Inventory Editing', '📦')}
+    ${ckHtml('rcpt_gen', 'Receipt / Sale Generation', '🧾')}
+    ${ckHtml('users_view', 'User Management Tab', '👥')}
+    ${ckHtml('act_view', 'Activity Logs Tab', '📋')}
+    ${ckHtml('acct_view', 'Accounting Tab', '💰')}
+    ${ckHtml('worth_view', 'Inventory Worth / Cost Visibility', '💎')}
+    ${ckHtml('rcpt_del', 'Delete Receipts', '🗑️')}
   </div>
 
   <div class="mf">
@@ -2008,31 +1990,31 @@ async function submitEditUser(id) {
   const err = $('eue');
   err.style.display = 'none';
   try {
-    const fullName  = $('efn').value.trim();
-    const username  = $('eun').value.trim();
-    const role      = $('er').value;
-    const password  = $('epw').value;
+    const fullName = $('efn').value.trim();
+    const username = $('eun').value.trim();
+    const role = $('er').value;
+    const password = $('epw').value;
 
     if (!username) { err.textContent = 'Username cannot be empty'; err.style.display = 'block'; return; }
     if (password && password.length < 6) { err.textContent = 'Password must be at least 6 characters'; err.style.display = 'block'; return; }
 
     const permissions = {
-      inv_edit:   !!$('ep_inv_edit')?.checked,
-      rcpt_gen:   !!$('ep_rcpt_gen')?.checked,
+      inv_edit: !!$('ep_inv_edit')?.checked,
+      rcpt_gen: !!$('ep_rcpt_gen')?.checked,
       users_view: !!$('ep_users_view')?.checked,
-      act_view:   !!$('ep_act_view')?.checked,
-      acct_view:  !!$('ep_acct_view')?.checked,
+      act_view: !!$('ep_act_view')?.checked,
+      acct_view: !!$('ep_acct_view')?.checked,
       worth_view: !!$('ep_worth_view')?.checked,
-      rcpt_del:   !!$('ep_rcpt_del')?.checked,
+      rcpt_del: !!$('ep_rcpt_del')?.checked,
     };
 
     const { error } = await sb.rpc('admin_update_user', {
       target_user_id: id,
-      new_username:   username,
-      new_password:   password || '',
-      new_full_name:  fullName,
+      new_username: username,
+      new_password: password || '',
+      new_full_name: fullName,
       new_permissions: permissions,
-      new_role:       role
+      new_role: role
     });
     if (error) throw error;
 
@@ -2254,7 +2236,7 @@ async function optimizeExistingImages() {
   const btn = $('optbtn'); const msg = $('optmsg'); const prog = $('optprog');
   if (btn) btn.disabled = true;
   if (msg) msg.style.display = 'block';
-  
+
   try {
     const itemsWithImages = _items.filter(i => i.image_url);
     const total = itemsWithImages.length;
@@ -2266,35 +2248,35 @@ async function optimizeExistingImages() {
         const res = await fetch(item.image_url);
         if (!res.ok) throw new Error('Fetch failed');
         const blob = await res.blob();
-        
+
         // 2. Process using new mechanism
         const processedBlob = await processImage(new File([blob], 'image.jpg', { type: 'image/jpeg' }));
-        
+
         // 3. Upload back to Supabase (new filename to avoid cache issues)
         const path = `optimized_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.jpg`;
         const { data, error } = await sb.storage.from('item-images').upload(path, processedBlob, { upsert: true });
         if (error) throw error;
 
         const { data: { publicUrl } } = sb.storage.from('item-images').getPublicUrl(path);
-        
+
         // 4. Update database
-        const updatePayload = { 
-          id: item.id, 
-          image_url: publicUrl, 
+        const updatePayload = {
+          id: item.id,
+          image_url: publicUrl,
           image_path: path,
           updated_at: new Date().toISOString()
         };
-        
+
         await sb.from('items').update(updatePayload).eq('id', item.id);
-        
+
       } catch (e) {
         console.error(`Failed to optimize item ${item.id}:`, e);
       }
-      
+
       count++;
       if (prog) prog.textContent = Math.round((count / total) * 100);
     }
-    
+
     toast('Optimization Complete! 🎉');
     await refreshInv();
   } catch (err) {
@@ -2326,7 +2308,7 @@ setInterval(async () => {
 // ════════════════════════════════════ BOOT
 async function boot() {
   const lm = $('LOAD-MSG'); if (lm) lm.textContent = 'Connecting to Supabase…';
-  
+
   const timeout = setTimeout(() => {
     $('LOAD').style.display = 'none';
     const err = $('cfg-err');
@@ -2337,12 +2319,12 @@ async function boot() {
   if (!hasCfg()) { clearTimeout(timeout); $('LOAD').style.display = 'none'; showCfg(); return; }
   const { url, key } = getCfg();
   if (!initSB(url, key)) { clearTimeout(timeout); $('LOAD').style.display = 'none'; showCfg(); return; }
-  
+
   try {
     const { data, error } = await sb.from('profiles').select('id').limit(1);
     const { data: { session } } = await sb.auth.getSession();
     clearTimeout(timeout);
-    
+
     if (session?.user) {
       // Session exists, setupAuth will handle UI transition
       setupAuth();
@@ -2351,7 +2333,7 @@ async function boot() {
       $('LOGIN').style.display = 'flex';
       setupAuth();
     }
-    
+
     if (typeof applyStyles === 'function') await applyStyles();
   } catch (e) {
     clearTimeout(timeout);
