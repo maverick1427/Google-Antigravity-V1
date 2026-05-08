@@ -6,9 +6,13 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
   pages: write
-  id-token: write
+  status: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
@@ -22,12 +26,17 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          echo "Injecting Supabase credentials..."
           sed -i "s|SUPABASE_URL_PLACEHOLDER|${{ env.SUPABASE_URL }}|g" app.js
           sed -i "s|SUPABASE_KEY_PLACEHOLDER|${{ env.SUPABASE_KEY }}|g" app.js
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: '.'
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
