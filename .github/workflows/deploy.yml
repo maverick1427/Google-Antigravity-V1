@@ -1,42 +1,31 @@
-name: Deploy to GitHub Pages with Secrets
+name: Deploy to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
-
-permissions:
-  contents: write
-  pages: write
-  status: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
+    branches: [main]
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Inject Supabase Credentials
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          sed -i "s|SUPABASE_URL_PLACEHOLDER|${{ env.SUPABASE_URL }}|g" app.js
-          sed -i "s|SUPABASE_KEY_PLACEHOLDER|${{ env.SUPABASE_KEY }}|g" app.js
+          sed -i 's|SUPABASE_URL_PLACEHOLDER|${{ env.SUPABASE_URL }}|g' app.js
+          sed -i 's|SUPABASE_KEY_PLACEHOLDER|${{ env.SUPABASE_KEY }}|g' app.js
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+      - uses: actions/configure-pages@v4
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v4
