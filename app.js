@@ -312,8 +312,11 @@ function setupAuth() {
         if (secAdmin) secAdmin.style.display = (isAdmin || perms.users_view || perms.act_view) ? '' : 'none';
         ['LOAD', 'LOGIN', 'CFG-SCREEN', 'ADMIN-SCREEN'].forEach(id => { const el = $(id); if (el) { el.style.display = 'none'; el.classList && el.classList.remove('on'); } });
         $('APP').classList.add('on');
-        await refreshInv(); // This was the missing link to show your data
-        goTo('dash');
+        // Small delay to ensure session is fully propagated to all listeners
+        setTimeout(async () => {
+          await refreshInv(); 
+          goTo('dash');
+        }, 300);
         return;
       }
     }
@@ -327,6 +330,15 @@ function setupAuth() {
     if ($('lbtn')) { $('lbtn').disabled = false; $('lbtn').textContent = '🔐 Sign In'; }
     CU = null;
   });
+}
+
+// ════════════════════════════════════ PENDING COUNT (receipt badge)
+async function updatePendingCount() {
+  try {
+    const { data } = await sb.from('sales').select('id', { count: 'exact', head: true }).eq('paid', false);
+    const badge = $('pend-count');
+    if (badge) badge.textContent = (data || 0);
+  } catch (e) { console.warn('updatePendingCount:', e.message); }
 }
 
 // ════════════════════════════════════ NAVIGATION
@@ -1246,7 +1258,7 @@ async function loadRcpt() {
   <div class="ph"><div class="pt">Receipts</div></div>
   <div class="fb">
     <input class="fi" id="rq" placeholder="🔍 Receipt no. or customer…" oninput="renderRcpt()">
-    <div style="display:flex;align-items:center;gap:8px;background:#f8fafc;padding:4px;border-radius:6px;border:1px solid var(--br)">
+    <div style="display:flex;align-items:center;gap:8px;background:rgba(15,23,42,0.5);padding:4px;border-radius:6px;border:1px solid var(--br)">
       <input type="date" id="rfrom" onchange="renderRcpt()" style="border:none;background:transparent;padding:4px">
       <span style="color:var(--mt);font-size:12px;font-weight:600">to</span>
       <input type="date" id="rto" onchange="renderRcpt()" style="border:none;background:transparent;padding:4px">
@@ -1275,15 +1287,15 @@ async function renderRcpt() {
 
   const tot = s.reduce((a, x) => a + Number(x.total), 0);
   const el = $('rtbl'); if (!el) return;
-  el.innerHTML = `<div class="al ali" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
+  el.innerHTML = `<div class="al ali" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;background:rgba(59,130,246,0.1);color:var(--tx);border-color:var(--nv)">
     <span>Showing <strong>${s.length}</strong> receipts</span>
     <span style="font-size:15px">Total: <strong>${fmtM(tot)}</strong></span>
   </div>
   ${s.length ? `<div class="card" style="padding:0;overflow:hidden"><div class="tw"><table>
   <thead><tr><th>Receipt#</th><th>Customer</th><th>Subtotal</th><th>Disc</th><th>Total</th><th>Method</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
-  <tbody>${s.map(x => `<tr style="${!x.paid ? 'background:#fffbeb' : ''}">
+  <tbody>${s.map(x => `<tr style="${!x.paid ? 'background:rgba(245,158,11,0.1)' : ''}">
     <td><span class="bdg bb">No.${x.receipt_no}</span></td>
-    <td><strong>${esc(x.customer_name)}</strong></td>
+    <td><strong style="color:var(--tx)">${esc(x.customer_name)}</strong></td>
     <td class="tdm">${fmtM(x.subtotal)}</td><td class="tdm">${fmtM(x.discount)}</td>
     <td><strong style="color:var(--nv)">${fmtM(x.total)}</strong></td>
     <td>${pmBadge(x.payment_method || 'Cash')}</td>
@@ -1723,7 +1735,7 @@ function showRep(t, btn) {
   document.querySelectorAll('#page-rep .btn:not(.bg_):not([onclick="runRep()"])').forEach(b => { b.className = 'btn bs'; });
   if (btn) btn.className = 'btn bp';
   const catO = (window._repCats || []).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
-  const dateInput = `<div style="display:flex;align-items:center;gap:8px;background:#f8fafc;padding:4px;border-radius:6px;border:1px solid var(--br)"><input type="date" id="rff" style="border:none;background:transparent;padding:4px"><span style="color:var(--mt);font-size:12px;font-weight:600">to</span><input type="date" id="rft" style="border:none;background:transparent;padding:4px"></div>`;
+  const dateInput = `<div style="display:flex;align-items:center;gap:8px;background:rgba(15,23,42,0.5);padding:4px;border-radius:6px;border:1px solid var(--br)"><input type="date" id="rff" style="border:none;background:transparent;padding:4px;color:var(--tx)"><span style="color:var(--mt);font-size:12px;font-weight:600">to</span><input type="date" id="rft" style="border:none;background:transparent;padding:4px;color:var(--tx)"></div>`;
   const fils = {
     sales: `${dateInput}<select id="rfpm" class="fi"><option value="">All Methods</option><option>Cash</option><option>Mess Bill</option><option>PAFWA Home Store</option><option>Gift</option><option>Special Case</option></select><select id="rfst" class="fi"><option value="">All Statuses</option><option value="paid">Paid</option><option value="pend">Unpaid</option></select>`,
     inv: `<select id="rfcat" class="fi"><option value="">All Categories</option>${catO}</select><input id="rfloc" placeholder="📍 Location" class="fi" style="width:120px">`,
@@ -1763,7 +1775,7 @@ async function runRep() {
       const totVal = s.reduce((a, x) => a + Number(x.total || 0), 0);
       const totProf = s.reduce((a, x) => a + (profitMap[x.id] || 0), 0);
 
-      out.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="padding:16px 20px;background:#f8fafc;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center"><span class="ct_" style="margin:0">📈 Sales Report</span><div style="text-align:right"><div style="font-size:18px;font-weight:900;color:var(--nv)">${fmtM(totVal)}</div><div style="font-size:11px;color:var(--mt)">${s.length} receipts</div></div></div>
+      out.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="padding:16px 20px;background:rgba(15,23,42,0.5);border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center"><span class="ct_" style="margin:0">📈 Sales Report</span><div style="text-align:right"><div style="font-size:18px;font-weight:900;color:var(--nv)">${fmtM(totVal)}</div><div style="font-size:11px;color:var(--mt)">${s.length} receipts</div></div></div>
       <div class="tw"><table><thead><tr><th>Receipt#</th><th>Customer</th><th>Subtotal</th><th>Disc</th><th>Total</th><th>Profit</th><th>Method</th><th>Paid</th><th>Date</th></tr></thead>
       <tbody>${s.map(x => `<tr><td><span class="bdg bb">No.${x.receipt_no}</span></td><td><strong>${esc(x.customer_name)}</strong></td><td class="tdm">${fmtM(x.subtotal)}</td><td class="tdm">${fmtM(x.discount)}</td><td><strong style="color:var(--nv)">${fmtM(x.total)}</strong></td><td style="color:var(--gr);font-weight:700">${fmtM(profitMap[x.id] || 0)}</td><td>${pmBadge(x.payment_method || 'Cash')}</td><td>${payBadge(x.paid)}</td><td class="tdm">${fmtDT(x.created_at)}</td></tr>`).join('')}</tbody>
       <tfoot style="background:var(--bg);font-weight:800"><tr><td colspan="2" style="text-align:right">TOTALS</td><td class="tdm">${fmtM(totSub)}</td><td class="tdm">${fmtM(totDisc)}</td><td><strong style="color:var(--nv)">${fmtM(totVal)}</strong></td><td style="color:var(--gr)">${fmtM(totProf)}</td><td colspan="3"></td></tr></tfoot>
@@ -1776,7 +1788,7 @@ async function runRep() {
       if (cat) i = i.filter(x => x.category_id === cat);
       if (loc) i = i.filter(x => x.location?.toLowerCase().includes(loc));
 
-      out.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="padding:16px 20px;background:#f8fafc;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center"><span class="ct_" style="margin:0">${_repType === 'low' ? '⚠️ Low Stock' : '📦 Inventory'}</span><span class="bdg bg">${i.length} items</span></div>
+      out.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><div style="padding:16px 20px;background:rgba(15,23,42,0.5);border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center"><span class="ct_" style="margin:0">${_repType === 'low' ? '⚠️ Low Stock' : '📦 Inventory'}</span><span class="bdg bg">${i.length} items</span></div>
       <div class="tw"><table><thead><tr><th>S/N</th><th>Name</th><th>Category</th><th>Location</th><th>Cost</th><th>Sale Price</th><th>Stock</th><th>Min Alert</th></tr></thead>
       <tbody>${i.map(x => `<tr><td><code>${esc(x.serial_number || '—')}</code></td><td><strong>${esc(x.name)}</strong></td><td class="tdm">${esc(x.categories?.name || '—')}</td><td class="tdm">${esc(x.location || '—')}</td><td>${fmtM(x.cost_price)}</td><td><strong style="color:var(--nv)">${fmtM(x.sale_price)}</strong></td><td>${stBadge(x.stock_qty, x.min_stock_threshold)}</td><td class="tdm">${x.min_stock_threshold || 5}</td></tr>`).join('')}</tbody></table></div></div>`;
       _repData = i;
@@ -1792,7 +1804,7 @@ async function runRep() {
         <div class="stat r"><div class="sl">Liabilities Added</div><div class="sv" style="color:var(--rd)">${fmtM(l.reduce((a, x) => a + Number(x.amount), 0))}</div></div>
       </div>
       <div class="card" style="padding:0;overflow:hidden">
-        <div style="padding:16px 20px;background:#f8fafc;border-bottom:1px solid var(--br)"><span class="ct_" style="margin:0">Revenue Breakdown</span></div>
+        <div style="padding:16px 20px;background:rgba(15,23,42,0.5);border-bottom:1px solid var(--br)"><span class="ct_" style="margin:0">Revenue Breakdown</span></div>
         <div class="tw"><table>
         <thead><tr><th>Payment Method</th><th>Transaction Count</th><th>Total Revenue</th></tr></thead>
         <tbody>${Object.entries(byM).map(([m, v]) => `<tr><td>${pmBadge(m)}</td><td class="tdm">${v.c}</td><td><strong style="color:var(--nv)">${fmtM(v.t)}</strong></td></tr>`).join('')}</tbody></table></div>
@@ -1830,7 +1842,7 @@ async function loadLogs() {
   <div class="ph"><div class="pt">Activity Logs</div><button class="btn bs" onclick="loadLogs()">🔄 Refresh</button></div>
   <div class="fb">
     <input class="fi" id="lq" placeholder="🔍 Search username, action, details…" oninput="renderLogs()">
-    <div style="display:flex;align-items:center;gap:8px;background:#f8fafc;padding:4px;border-radius:6px;border:1px solid var(--br)">
+    <div style="display:flex;align-items:center;gap:8px;background:rgba(15,23,42,0.5);padding:4px;border-radius:6px;border:1px solid var(--br)">
       <input type="date" id="lfrom" onchange="renderLogs()" style="border:none;background:transparent;padding:4px">
       <span style="color:var(--mt);font-size:12px;font-weight:600">to</span>
       <input type="date" id="lto" onchange="renderLogs()" style="border:none;background:transparent;padding:4px">
