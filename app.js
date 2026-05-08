@@ -1,11 +1,13 @@
 'use strict';
 window.addEventListener('keydown', e => { if (e.shiftKey && e.key === 'R') { if (confirm('Emergency Reset?')) { localStorage.clear(); location.reload(); } } });
 
-// ════════════════════════════════════ HARDCODED CONFIGURATION
-// To avoid entering the URL and Key on every new device, paste them here:
-// IMPORTANT: Only use the "anon" "public" key! Never use the "service_role" key.
-const HARDCODED_URL = 'https://isxefzwqtsiimhsfiuet.supabase.co';
-const HARDCODED_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlzeGVmendxdHNpaW1oc2ZpdWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNjYxOTksImV4cCI6MjA5Mjg0MjE5OX0.c7rxoBQOPzOrfB9WAc-UXR9bS5GkSUA-nxA5pQwysXc';
+// CONFIGURATION - Injected by GitHub Actions during deployment
+// DO NOT EDIT THESE DIRECTLY - Use GitHub Secrets instead
+const SUPABASE_URL_PLACEHOLDER = '';
+const SUPABASE_KEY_PLACEHOLDER = '';
+
+const HARDCODED_URL = SUPABASE_URL_PLACEHOLDER;
+const HARDCODED_KEY = SUPABASE_KEY_PLACEHOLDER;
 
 // ════════════════════════════════════ SUPABASE INIT
 const LS_URL = 'pafwa_sb_url', LS_KEY = 'pafwa_sb_key';

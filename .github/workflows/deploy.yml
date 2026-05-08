@@ -1,0 +1,35 @@
+name: Deploy to GitHub Pages with Secrets
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Inject Supabase Credentials
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          echo "Injecting Supabase credentials..."
+          sed -i "s|SUPABASE_URL_PLACEHOLDER|${{ env.SUPABASE_URL }}|g" app.js
+          sed -i "s|SUPABASE_KEY_PLACEHOLDER|${{ env.SUPABASE_KEY }}|g" app.js
+          echo "Credentials injected successfully!"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

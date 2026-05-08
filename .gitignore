@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Environment and Config (Contains secrets)
+.env
+.env.local
+supabase-config.js
+credentials.txt
+
+# Build output
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+*.tmp
+*.temp
