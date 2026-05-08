@@ -45,11 +45,26 @@
     <div class="card-title">PAFWA APF</div>
     <div class="card-sub">Pakistan Air Force Women Association · PAC Kamra</div>
     <div class="card-center"><span class="card-badge">FIRST TIME SETUP</span></div>
-    <p style="font-size:13px;color:#64748b;margin-bottom:18px;text-align:center;line-height:1.6">Paste your Supabase project details below.</p>
+    <p style="font-size:13px;color:#64748b;margin-bottom:18px;text-align:center;line-height:1.6">Setup your connection by scanning the QR code or entering details manually.</p>
     <div id="cfg-err" class="al ale" style="display:none"></div>
+    
+    <!-- QR Scanner Section -->
+    <div id="qr-scan-section" style="margin-bottom:20px">
+      <div style="display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap">
+        <button class="btn bp" onclick="startQRCamera()" style="flex:1">📷 Scan QR with Camera</button>
+        <button class="btn bs" onclick="document.getElementById('qr-file-input').click()" style="flex:1">🖼️ Upload QR Image</button>
+      </div>
+      <input type="file" id="qr-file-input" accept="image/*" style="display:none" onchange="scanQRFromFile(this)">
+      <div id="qr-reader" style="display:none;width:100%;margin:10px 0"></div>
+      <div id="qr-status" style="text-align:center;font-size:12px;color:#94a3b8;margin-bottom:10px"></div>
+    </div>
+    
+    <div style="text-align:center;margin:15px 0;color:#64748b;font-size:12px">— OR ENTER MANUALLY —</div>
+    
     <div class="fg"><label>Supabase Project URL *</label><input id="cfg-url" placeholder="https://xxxxxxxxxxxx.supabase.co" autocomplete="off"></div>
     <div class="fg"><label>Supabase Anon (Public) Key *</label><textarea id="cfg-key" rows="3" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea></div>
     <button class="btn bp bfl" onclick="saveCfgAndInit()">🚀 Connect &amp; Start</button>
+    <button id="qr-stop-btn" class="btn bs bfl" style="display:none;margin-top:10px" onclick="stopQRCamera()">✕ Stop Camera</button>
   </div>
 </div>
 
@@ -245,6 +260,7 @@
   <div id="import-log" style="margin-top:20px; width:100%; max-width:600px; height:200px; background:rgba(0,0,0,0.5); border-radius:8px; padding:12px; font-family:monospace; font-size:11px; overflow-y:auto; color:#a3e635; text-align:left; border:1px solid rgba(255,255,255,0.2);"></div>
 </div>
 
-<script src="app.js?v=6"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

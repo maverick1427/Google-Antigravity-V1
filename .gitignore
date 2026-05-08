@@ -6,6 +6,7 @@ node_modules/
 .env.local
 supabase-config.js
 credentials.txt
+qr-generator.html
 
 # Build output
 dist/

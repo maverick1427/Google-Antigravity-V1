@@ -1,11 +1,11 @@
 'use strict';
 window.addEventListener('keydown', e => { if (e.shiftKey && e.key === 'R') { if (confirm('Emergency Reset?')) { localStorage.clear(); location.reload(); } } });
 
-// CONFIGURATION - Injected by GitHub Actions during deployment
-// __SUPABASE_URL__ will be replaced with the actual URL
-// __SUPABASE_KEY__ will be replaced with the actual key
-const HARDCODED_URL = "__SUPABASE_URL__";
-const HARDCODED_KEY = "__SUPABASE_KEY__";
+// ════════════════════════════════════ CONFIGURATION
+// Credentials are hardcoded for client convenience
+// QR scanner is available as backup option
+const HARDCODED_URL = 'https://isxefzwqtsiimhsfiuet.supabase.co';
+const HARDCODED_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlzeGVmendxdHNpaW1oc2ZpdWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNjYxOTksImV4cCI6MjA5Mjg0MjE5OX0.c7rxoBQOPzOrfB9WAc-UXR9bS5GkSUA-nxA5pQwysXc';
 
 // ════════════════════════════════════ SUPABASE INIT
 const LS_URL = 'pafwa_sb_url', LS_KEY = 'pafwa_sb_key';
@@ -133,14 +133,19 @@ const Data = {
 };
 
 function getCfg() {
-  let url = HARDCODED_URL || localStorage.getItem(LS_URL) || '';
-  const key = HARDCODED_KEY || localStorage.getItem(LS_KEY) || '';
+  // Use HARDCODED_URL only if it's a real Supabase URL (not a placeholder)
+  const hardcodedUrl = (HARDCODED_URL && HARDCODED_URL.includes('supabase.co')) ? HARDCODED_URL : '';
+  const hardcodedKey = (HARDCODED_KEY && HARDCODED_KEY.startsWith('eyJ')) ? HARDCODED_KEY : '';
+  
+  let url = hardcodedUrl || localStorage.getItem(LS_URL) || '';
+  let key = hardcodedKey || localStorage.getItem(LS_KEY) || '';
+  
   if (url) {
     url = url.replace(/\/+$/, "");
     if (url.endsWith("/rest/v1")) url = url.slice(0, -8);
     if (url.endsWith("/auth/v1")) url = url.slice(0, -8);
   }
-  return { url, key };
+return { url, key };
 }
 function hasCfg() { const c = getCfg(); return !!(c.url && c.key); }
 
@@ -2325,6 +2330,130 @@ setInterval(async () => {
     if (!s?.value || !s.value.startsWith(today)) { doBackup(); toast('🕐 Daily noon auto-backup running!', 'i'); }
   }
 }, 30000);
+
+// ════════════════════════════════════ QR CODE SCANNER
+let html5QrCode = null;
+let qrScanningInterval = null;
+
+async function startQRCamera() {
+  const reader = $('qr-reader');
+  const status = $('qr-status');
+  const stopBtn = $('qr-stop-btn');
+  
+  if (!reader) return;
+  
+  status.textContent = 'Starting camera...';
+  status.style.color = '#94a3b8';
+  
+  try {
+    html5QrCode = new Html5Qrcode('qr-reader');
+    reader.style.display = 'block';
+    stopBtn.style.display = 'block';
+    
+    await html5QrCode.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      onQRCodeSuccess,
+      () => {}
+    );
+    status.textContent = '📷 Point camera at QR code';
+  } catch (err) {
+    status.textContent = 'Camera error: ' + err.message;
+    status.style.color = '#ef4444';
+  }
+}
+
+function onQRCodeSuccess(decodedText) {
+  processQRData(decodedText);
+}
+
+async function scanQRFromFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  
+  const status = $('qr-status');
+  status.textContent = 'Processing image...';
+  status.style.color = '#94a3b8';
+  
+  try {
+    const html5QrCode = new Html5Qrcode('qr-reader');
+    html5QrCode.scanFile(file, true).then(result => {
+      processQRData(result);
+    }).catch(() => {
+      status.textContent = 'Could not find QR code in image';
+      status.style.color = '#ef4444';
+    });
+  } catch (err) {
+    status.textContent = 'Error reading file: ' + err.message;
+    status.style.color = '#ef4444';
+  }
+}
+
+function processQRData(data) {
+  const status = $('qr-status');
+  
+  if (!status) {
+    console.error('Status element not found');
+    return;
+  }
+  
+  try {
+    // Decode base64
+    const decoded = atob(data);
+    const parts = decoded.split('|');
+    
+    if (parts.length >= 2) {
+      const url = parts[0].trim();
+      const key = parts[1].trim();
+      
+      // Verify it looks like a Supabase URL and key
+      if (url.includes('supabase.co') && key.startsWith('eyJ')) {
+        // Store credentials in localStorage directly
+        localStorage.setItem(LS_URL, url);
+        localStorage.setItem(LS_KEY, key);
+        
+        // Also set in input fields so user can see
+        const urlInput = $('cfg-url');
+        const keyInput = $('cfg-key');
+        if (urlInput) urlInput.value = url;
+        if (keyInput) keyInput.value = key;
+        
+        status.textContent = '✅ Connected! Loading...';
+        status.style.color = '#10b981';
+        status.style.fontWeight = 'bold';
+        
+        // Hide config screen and boot
+        $('CFG-SCREEN').style.display = 'none';
+        boot();
+        
+        return;
+      }
+    }
+    
+    status.textContent = 'Invalid QR code';
+    status.style.color = '#ef4444';
+  } catch (e) {
+    status.textContent = 'QR decode failed';
+    status.style.color = '#ef4444';
+  }
+}
+
+function stopQRCamera() {
+  const reader = $('qr-reader');
+  const stopBtn = $('qr-stop-btn');
+  const status = $('qr-status');
+  
+  if (html5QrCode) {
+    html5QrCode.stop().then(() => {
+      html5QrCode.clear();
+      html5QrCode = null;
+    }).catch(() => {});
+  }
+  
+  if (reader) reader.style.display = 'none';
+  if (stopBtn) stopBtn.style.display = 'none';
+  // Don't clear status so user can see the message
+}
 
 // ════════════════════════════════════ BOOT
 async function boot() {
