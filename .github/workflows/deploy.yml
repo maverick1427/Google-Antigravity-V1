@@ -19,8 +19,8 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          sed -i "s|__SUPABASE_URL__ = ''|__SUPABASE_URL__ = '\${{ env.SUPABASE_URL }}'|g" app.js
-          sed -i "s|__SUPABASE_KEY__ = ''|__SUPABASE_KEY__ = '\${{ env.SUPABASE_KEY }}'|g" app.js
+          sed -i "s|__SUPABASE_URL__|\${{ env.SUPABASE_URL }}|g" app.js
+          sed -i "s|__SUPABASE_KEY__|\${{ env.SUPABASE_KEY }}|g" app.js
 
       - uses: actions/configure-pages@v4
 
