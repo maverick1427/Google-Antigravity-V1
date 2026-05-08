@@ -997,24 +997,26 @@ async function delCat(id) {
 
 // ════════════════════════════════════ POS
 async function loadPOS() {
-  const items = await Data.getItems();
-  _posItems = items.filter(i => !i.archived);
-
-  // Ensure categories are mapped for POS too if needed (though usually not used in grid)
-  const cats = await Data.getCategories();
-  _posItems = _posItems.map(i => {
-    const catObj = i.categories && typeof i.categories === 'object' && i.categories.name
-      ? i.categories
-      : cats.find(c => c.id === i.category_id);
-    return { ...i, categories: catObj };
-  });
+  try {
+    const items = await Data.getItems();
+    const cats = await Data.getCategories();
+    _posItems = (items || []).filter(i => !i.archived).map(i => {
+      const catObj = i.categories && typeof i.categories === 'object' && i.categories.name
+        ? i.categories
+        : cats.find(c => c.id === i.category_id);
+      return { ...i, categories: catObj };
+    });
+  } catch (e) {
+    console.warn('loadPOS data fetch error:', e);
+    _posItems = _posItems || [];
+  }
   const sess = CU;
   $('page-pos').innerHTML = `
   <div class="ph"><div class="pt">Shop / POS</div></div>
   <div class="pos-w">
     <div class="pos-l">
       <div class="card" style="margin-bottom:14px;padding:14px">
-        <input id="posq" style="width:100%;padding:10px 14px;border:1.5px solid var(--br);border-radius:8px;font-size:14px;outline:none;background:#f8fafc;color:var(--nv);" placeholder="🔍 Search items by name, serial, location…" oninput="filterPOS(this.value)">
+        <input id="posq" style="width:100%;padding:10px 14px;border:1.5px solid var(--br);border-radius:8px;font-size:14px;outline:none;background:rgba(15,23,42,0.5);color:var(--tx)" placeholder="🔍 Search items by name, serial, location…" oninput="filterPOS(this.value)">
       </div>
       <div id="posgrid" class="ig"></div>
     </div>
@@ -1060,16 +1062,23 @@ async function loadPOS() {
 
 function renderPOSGrid(items) {
   const el = $('posgrid'); if (!el) return;
-  if (!items.length) { el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--mt);background:var(--cd);border-radius:10px">No items found</div>'; return; }
+  if (!items || !items.length) { 
+    el.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--mt);background:var(--cd);border-radius:10px">
+      <div style="font-size:48px;margin-bottom:10px">📦</div>
+      <div>No items found</div>
+    </div>`; 
+    return; 
+  }
   el.innerHTML = items.map(i => {
-    const oos = Number(i.stock_qty) <= 0; return `<div class="ic${oos ? ' oos' : ''}" onclick="${oos ? '' : 'addToCart(\'' + i.id + '\')'}" style="background:var(--cd);border:1px solid var(--br);padding:10px;display:flex;flex-direction:column;gap:5px">
-    <div class="ic-img" style="height:120px;background:#000;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:8px">
-      ${i.image_url ? `<img src="${esc(i.image_url)}" style="max-width:100%;max-height:100%;object-fit:contain">` : '<span style="font-size:32px">📦</span>'}
+    const oos = Number(i.stock_qty || 0) <= 0; 
+    return `<div class="ic${oos ? ' oos' : ''}" onclick="${oos ? '' : 'addToCart(\'' + i.id + '\')'}" style="background:var(--cd);border:1px solid var(--br);padding:12px;display:flex;flex-direction:column;gap:8px;min-height:220px;justify-content:space-between">
+    <div class="ic-img" style="height:120px;background:#000;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      ${i.image_url ? `<img src="${esc(i.image_url)}" style="max-width:100%;max-height:100%;object-fit:contain">` : '<span style="font-size:40px">📦</span>'}
     </div>
-    <div style="font-weight:800;font-size:14px;line-height:1.2;color:var(--nv);min-height:34px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(i.name)}</div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:auto">
-      <div style="font-size:16px;font-weight:900;color:var(--nv)">${fmtM(i.sale_price)}</div>
-      <div style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;${oos ? 'background:#fee2e2;color:#b91c1c' : 'background:#f0fdf4;color:#16a34a'}">${oos ? 'Out' : 'Stock: ' + i.stock_qty}</div>
+    <div style="font-weight:800;font-size:14px;line-height:1.2;color:var(--tx);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1">${esc(i.name || 'Unnamed Item')}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+      <div style="font-size:16px;font-weight:900;color:var(--nv)">${fmtM(i.sale_price || 0)}</div>
+      <div style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;${oos ? 'background:#fee2e2;color:#b91c1c' : 'background:#f0fdf4;color:#16a34a'}">${oos ? 'Out' : 'Stock: ' + (i.stock_qty || 0)}</div>
     </div>
   </div>`;
   }).join('');
