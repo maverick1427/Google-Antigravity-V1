@@ -329,6 +329,24 @@ function setupAuth() {
   });
 }
 
+// ════════════════════════════════════ PENDING COUNT (receipt badge)
+async function updatePendingCount() {
+  try {
+    const { data } = await sb.from('sales').select('id', { count: 'exact', head: true }).eq('paid', false);
+    // If there's a badge element for pending count, update it
+    const badge = $('pend-count');
+    if (badge) badge.textContent = (data || 0);
+  } catch (e) { console.warn('updatePendingCount:', e.message); }
+}
+
+// ════════════════════════════════════ SIDEBAR TOGGLE
+function toggleSB() {
+  const sb = $('SB');
+  if (sb) sb.classList.toggle('open');
+  const ov = $('SB-OVERLAY');
+  if (ov) ov.classList.toggle('on');
+}
+
 // ════════════════════════════════════ NAVIGATION
 document.querySelectorAll('.ni[data-p]').forEach(b => b.addEventListener('click', () => goTo(b.dataset.p)));
 const LOADERS = { dash: loadDash, inv: loadInv, pos: loadPOS, rcpt: loadRcpt, acct: loadAcct, rep: loadRep, logs: loadLogs, users: loadUsers, bkp: loadBkp, cfg: loadCfg, maint: loadMaint };
