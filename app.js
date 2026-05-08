@@ -2,12 +2,11 @@
 window.addEventListener('keydown', e => { if (e.shiftKey && e.key === 'R') { if (confirm('Emergency Reset?')) { localStorage.clear(); location.reload(); } } });
 
 // CONFIGURATION - Injected by GitHub Actions during deployment
-// DO NOT EDIT THESE DIRECTLY - Use GitHub Secrets instead
-const SUPABASE_URL_PLACEHOLDER = '';
-const SUPABASE_KEY_PLACEHOLDER = '';
+const __SUPABASE_URL__ = '';
+const __SUPABASE_KEY__ = '';
 
-const HARDCODED_URL = SUPABASE_URL_PLACEHOLDER;
-const HARDCODED_KEY = SUPABASE_KEY_PLACEHOLDER;
+const HARDCODED_URL = __SUPABASE_URL__;
+const HARDCODED_KEY = __SUPABASE_KEY__;
 
 // ════════════════════════════════════ SUPABASE INIT
 const LS_URL = 'pafwa_sb_url', LS_KEY = 'pafwa_sb_key';
