@@ -1,6 +1,6 @@
 # PAFWA Inventory & Management System
 
-A professional offline-first inventory, Point of Sale (POS), and accounting management system designed for **Pakistan Air Force Women Association (PAFWA)** at PAC Kamra.
+A professional offline-first inventory, Point of Sale (POS), and accounting management system designed for **(PAFWA)**.
 
 > **Version:** 3.2 | **Built with:** HTML5, JavaScript, Supabase, Dexie.js (IndexedDB)
 
